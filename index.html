@@ -75,6 +75,22 @@ th{font-size:.85rem;color:var(--mute);font-weight:600}
 .dchip span{font-weight:700}
 .dchip.on{background:var(--sun);border-color:var(--sun);color:#2b4a47}
 .dchip.on b{color:#2b4a47}
+.legcard{background:var(--card);border-radius:16px;padding:2px 14px 12px;margin:14px 0;box-shadow:0 2px 0 var(--line)}
+.legcard h2{margin:12px 0 4px}
+.fl{padding:10px 0;border-top:1px dashed var(--line);cursor:pointer}
+.fl .route{font-size:1.1rem}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
+.thumbs img{width:64px;height:64px;object-fit:cover;border-radius:10px;display:block}
+.file{display:inline-block;padding:6px 10px;border-radius:10px;background:var(--bg);font-size:.85rem;text-decoration:none}
+.fwrap{position:relative;display:inline-block}
+.fwrap .x{position:absolute;right:-6px;top:-6px;width:22px;height:22px;border-radius:50%;border:0;background:var(--bad);color:#fff;font-size:.7rem;padding:0}
+.cb{width:24px;height:24px;margin:2px 0 0;accent-color:var(--leaf);flex:none}
+.item{justify-content:flex-start;align-items:flex-start;gap:12px}
+.item .tt{flex:1;min-width:0;cursor:pointer}
+.item.done .tt strong{text-decoration:line-through;color:var(--mute);font-weight:400}
+h3.cat{display:flex;justify-content:space-between;align-items:center;color:var(--ink);font:700 1.05rem var(--serif);margin:20px 0 4px}
+h3.cat small{font:400 .8rem sans-serif;color:var(--mute)}
+details{margin-top:10px}summary{color:var(--sea);font-size:.9rem}
 /* trip cards */
 .trip{position:relative;display:flex;flex-direction:column;background:var(--card);border-radius:16px;overflow:hidden;margin:12px 0;cursor:pointer;box-shadow:0 2px 0 var(--line);transition:transform .15s}
 .trip .art{display:block;width:100%;height:76px}
@@ -116,15 +132,15 @@ const INFO_CATS = ['簽證入境', '保險', '交通票券', '網卡通訊', '�
 /* ===== 基本狀態 ===== */
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const TABLES = ['itinerary', 'flights', 'lodging', 'info', 'members', 'expenses'];
+const TABLES = ['itinerary', 'flights', 'lodging', 'info', 'members', 'expenses', 'restaurants', 'check_cats', 'check_items', 'tw_files'];
 const TABS = { itinerary: '行程', trip: '航住', info: '資訊', money: '記帳', members: '成員' };
 const TRIP = new URLSearchParams(location.search).get('trip');   // 沒有 = 首頁
 const KEY = 'tw:data:' + TRIP;
 const CONFIGURED = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_KEY);
 const sb = (CONFIGURED && window.supabase) ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
-let online = false, tab = 'itinerary', selDay = null, saving = false;
+let online = false, tab = 'itinerary', selDay = null, saving = false, infoTab = 'restaurants';
 let trips = JSON.parse(localStorage.getItem('tw:trips') || '[]');
-let state = { itinerary: [], flights: [], lodging: [], info: [], members: [], expenses: [] };
+let state = { itinerary: [], flights: [], lodging: [], info: [], members: [], expenses: [], restaurants: [], check_cats: [], check_items: [], tw_files: [] };
 if (TRIP) try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
 const curTrip = () => trips.find(t => t.id === TRIP);
 const persist = () => { localStorage.setItem('tw:trips', JSON.stringify(trips)); if (TRIP) localStorage.setItem(KEY, JSON.stringify(state)); };
@@ -163,7 +179,19 @@ async function saveRow(t, row) {
     return loadAll();
   }
 }
+async function purgeFiles(ids) {
+  const fs = state.tw_files.filter(f => ids.includes(f.owner_id));
+  if (!fs.length) return;
+  if (sb) { await sb.storage.from('tw-files').remove(fs.map(f => f.path)); await sb.from('tw_files').delete().in('id', fs.map(f => f.id)); }
+  state.tw_files = state.tw_files.filter(f => !ids.includes(f.owner_id));
+}
 async function delRow(t, id) {
+  if (t === 'restaurants' || t === 'check_items') await purgeFiles([id]);
+  if (t === 'check_cats') {
+    await purgeFiles(state.check_items.filter(i => i.cat_id === id).map(i => i.id));
+    if (sb) await sb.from('check_items').delete().eq('cat_id', id);
+    state.check_items = state.check_items.filter(i => i.cat_id !== id);
+  }
   if (sb) {
     if (t === 'tw_trips') {
       for (const x of TABLES) await sb.from(x).delete().eq('trip_id', id);
@@ -187,10 +215,13 @@ function subscribe() {
 const FORMS = {
   tw_trips:  { title: '旅程', fields: [['name','text','旅程名稱（例如：東京五日）'],['dest','text','目的地'],['start_day','date','出發日'],['end_day','date','回程日']] },
   itinerary: { title: '行程', fields: [['day','date','日期'],['time','time','時間'],['title','text','活動'],['place','text','地點'],['note','textarea','備註']] },
-  flights:   { title: '航班', fields: [['flight_no','text','航班編號（例如 BR198）'],['dep_airport','text','出發機場'],['arr_airport','text','抵達機場'],['dep_time','datetime-local','起飛時間（當地）'],['arr_time','datetime-local','抵達時間（當地）'],['booking_ref','text','訂位代號'],['note','textarea','備註（行李、座位…）']] },
+  flights:   { title: '航班', fields: [['dep_airport','text','出發機場'],['arr_airport','text','抵達機場'],['dep_time','datetime-local','起飛時間（當地）'],['arr_time','datetime-local','抵達時間（當地）'],['booking_ref','text','訂位代號'],['note','textarea','備註（行李、座位…）']] },
   lodging:   { title: '住宿', fields: [['name','text','住宿名稱'],['address','text','地址'],['check_in','date','入住日'],['check_out','date','退房日'],['booking_ref','text','訂房編號'],['url','url','訂房或地圖連結'],['note','textarea','備註（入住時間、設備…）']] },
   info:      { title: '資訊', fields: [['category','text','分類（可自行輸入）'],['title','text','標題'],['content','textarea','內容']] },
   members:   { title: '成員', fields: [['name','text','名稱']] },
+  restaurants: { title: '餐廳', fields: [['map_url','url','Google 地圖連結（貼上後自動帶入名稱）'],['name','text','餐廳名稱'],['note','textarea','備註（想吃什麼、營業時間…）']] },
+  check_cats:  { title: '類別', fields: [['name','text','類別名稱']] },
+  check_items: { title: '項目', fields: [['title','text','項目'],['note','textarea','備註']] },
   expenses:  { title: '支出' }
 };
 function fieldHtml([k, type, label], v) {
@@ -201,7 +232,8 @@ function fieldHtml([k, type, label], v) {
   return `<label>${label}</label><input name="${k}" type="${type}" value="${val}" ${req} ${list}>` + (k === 'category' ? `<datalist id="cats">${INFO_CATS.map(c => `<option value="${c}">`).join('')}</datalist>` : '');
 }
 function formHtml(t, row) {
-  if (t !== 'expenses') return FORMS[t].fields.map(f => fieldHtml(f, row[f[0]])).join('');
+  if (t === 'flights') return flightForm(row);
+  if (t !== 'expenses') return FORMS[t].fields.map(f => fieldHtml(f, row[f[0]])).join('') + (t === 'restaurants' ? '<div class="sub" id="mapst"></div>' : '') + (ATT.has(t) ? attHtml(cur.newId) : '');
   const cur = row.currency || 'TWD', rate = row.rate ?? DEFAULT_RATES[cur] ?? 1;
   const split = row.split?.length ? row.split : state.members.map(m => m.id);
   const opts = (arr, sel) => arr.map(([v, l]) => `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(l)}</option>`).join('');
@@ -215,29 +247,45 @@ function formHtml(t, row) {
     <label>分攤成員</label><div class="chk">${state.members.map(m => `<label><input type="checkbox" name="split" value="${m.id}" ${split.includes(m.id) ? 'checked' : ''}>${esc(m.name)}</label>`).join('')}</div>`;
 }
 let cur = null;
-function openForm(t, id) {
+function openForm(t, id, extra = {}) {
   if (!canEdit()) return toast('離線中，目前只能查看');
   if (t === 'expenses' && !state.members.length) return toast('請先到「成員」新增成員');
-  const row = id ? (t === 'tw_trips' ? trips : state[t]).find(r => r.id === id) : (t === 'itinerary' ? { day: selDay || curTrip()?.start_day } : {});
-  cur = { t, id, newId: id || (t === 'tw_trips' ? shortId() : crypto.randomUUID()) };
+  const row = id ? (t === 'tw_trips' ? trips : state[t]).find(r => r.id === id) : (t === 'itinerary' ? { day: selDay || curTrip()?.start_day } : t === 'flights' ? { flight_date: extra.leg === 'in' ? curTrip()?.end_day : curTrip()?.start_day } : {});
+  cur = { t, id, extra, newId: id || (t === 'tw_trips' ? shortId() : crypto.randomUUID()) };
   $('#frm').innerHTML = `<h3 style="margin:0;font-family:var(--serif);font-size:1.1rem;color:var(--ink)">${id ? '編輯' : '新增'}${FORMS[t].title}</h3>${formHtml(t, row)}
     <div class="btns">${id ? '<button type="button" class="del" id="del">刪除</button>' : ''}<button type="button" id="cancel">取消</button><button class="go">儲存</button></div>`;
   $('#cancel').onclick = () => $('#dlg').close();
   if ($('#del')) $('#del').onclick = async () => { if (confirm(t === 'tw_trips' ? '刪除旅程會連同所有行程、資訊與帳務一起刪除，確定嗎？' : '確定刪除？')) { await delRow(t, id); $('#dlg').close(); } };
   if ($('#cur')) $('#cur').onchange = e => { $('#rate').value = DEFAULT_RATES[e.target.value] ?? 1; };
+  wireForm(t);
   $('#dlg').showModal();
 }
 $('#frm').onsubmit = async e => {
   e.preventDefault();
   if (saving) return;
-  const fd = new FormData(e.target), row = {};
-  for (const [k, v] of fd.entries()) if (k !== 'split') row[k] = v === '' ? null : v;
+  const existing = cur.id ? (cur.t === 'tw_trips' ? trips : state[cur.t]).find(r => r.id === cur.id) : null;
+  const fd = new FormData(e.target), vals = {};
+  for (const [k, v] of fd.entries()) if (k !== 'split') vals[k] = v === '' ? null : v;
+  const row = { ...(existing || {}), ...vals, ...(existing ? {} : cur.extra || {}) };
   if (cur.t === 'tw_trips' && row.start_day && row.end_day && row.end_day < row.start_day) return toast('回程日不能早於出發日');
   if (cur.t === 'expenses') { row.split = fd.getAll('split'); row.amount = +row.amount; row.rate = +row.rate || 1; }
   row.id = cur.newId;                                  // 同一張表單永遠同一個 id
-  saving = true; e.submitter && (e.submitter.disabled = true);
-  $('#dlg').close();
-  try { await saveRow(cur.t, row); } finally { saving = false; }
+  saving = true; if (e.submitter) e.submitter.disabled = true;
+  try {
+    if (cur.t === 'flights') {                          // 只填航班號與日期時，自動查詢起降資料
+      row.flight_no = (row.flight_no || '').toUpperCase().replace(/\s+/g, '');
+      if (!row.dep_airport || !row.arr_airport) {
+        if (e.submitter) e.submitter.textContent = '查詢中…';
+        const r = await lookupFlight(row.flight_no, row.flight_date);
+        if (r && !r.error) { for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) row[k] = r[k] || row[k]; }
+        else toast(flightMsg(r?.error));
+      }
+    }
+    const files = [...($('#files')?.files || [])];
+    $('#dlg').close();
+    await saveRow(cur.t, row);
+    if (files.length) { toast('附件上傳中…'); await uploadFiles(cur.t, row.id, files); await loadAll(); toast('附件已上傳'); }
+  } finally { saving = false; }
 };
 
 /* ===== 插圖 ===== */
@@ -269,6 +317,111 @@ const countdown = t => {
   return d > 0 ? `還有 ${d} 天` : (t.end_day && today > t.end_day) ? '已結束' : '旅行中';
 };
 const link = u => /^https?:\/\//.test(u || '') ? `<a href="${esc(u)}" target="_blank" rel="noopener">連結</a>` : '';
+
+/* ===== 附件、航班查詢、地圖連結 ===== */
+const ATT = new Set(['restaurants', 'check_items']);
+const fileUrl = p => `${CONFIG.SUPABASE_URL}/storage/v1/object/public/tw-files/${p}`;
+const fileChip = f => /^image\//.test(f.mime || '')
+  ? `<a href="${esc(fileUrl(f.path))}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(fileUrl(f.path))}" alt="${esc(f.name)}"></a>`
+  : `<a class="file" href="${esc(fileUrl(f.path))}" target="_blank" rel="noopener">📄 ${esc(f.name || '檔案')}</a>`;
+const filesView = id => { const fs = state.tw_files.filter(f => f.owner_id === id); return fs.length ? `<div class="thumbs">${fs.map(fileChip).join('')}</div>` : ''; };
+const filesHtml = id => { const fs = state.tw_files.filter(f => f.owner_id === id); return fs.length ? `<div class="thumbs">${fs.map(f => `<span class="fwrap">${fileChip(f)}<button type="button" class="x" data-rmfile="${f.id}" aria-label="刪除附件">✕</button></span>`).join('')}</div>` : '<div class="sub">尚無附件</div>'; };
+const attHtml = id => `<label>附件（照片、PDF，單檔 10MB 內）</label><div id="flist">${filesHtml(id)}</div>` +
+  (sb ? `<input type="file" id="files" multiple accept="image/*,application/pdf" style="margin-top:8px">` : `<div class="sub">連線雲端後才能上傳附件</div>`);
+function shrink(f) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src); c.toBlob(b => res(b || f), 'image/jpeg', .85);
+    };
+    img.onerror = () => res(f);
+    img.src = URL.createObjectURL(f);
+  });
+}
+async function uploadFiles(owner_table, owner_id, files) {
+  for (const f of files) {
+    let blob = f, name = f.name, mime = f.type || 'application/octet-stream';
+    if (f.size > 10485760) { toast(name + ' 超過 10MB，已略過'); continue; }
+    if (mime.startsWith('image/')) { blob = await shrink(f); mime = blob.type || 'image/jpeg'; name = name.replace(/\.[^.]+$/, '') + '.jpg'; }
+    const ext = mime === 'application/pdf' ? 'pdf' : (name.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin');
+    const path = `${TRIP}/${owner_id}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await sb.storage.from('tw-files').upload(path, blob, { contentType: mime });
+    if (error) { toast('上傳失敗：' + error.message); continue; }
+    await sb.from('tw_files').insert({ id: crypto.randomUUID(), trip_id: TRIP, owner_table, owner_id, name, path, mime, size: blob.size });
+  }
+}
+async function rmFile(id) {
+  const f = state.tw_files.find(x => x.id === id);
+  if (!f || !canEdit() || !confirm('刪除這個附件？')) return;
+  if (sb) { await sb.storage.from('tw-files').remove([f.path]); await sb.from('tw_files').delete().eq('id', id); }
+  state.tw_files = state.tw_files.filter(x => x.id !== id); persist();
+  if ($('#flist')) $('#flist').innerHTML = filesHtml(cur.newId);
+  render();
+}
+function flightForm(row) {
+  return `<label>航班編號</label><input name="flight_no" required placeholder="例如 BR198" value="${esc(row.flight_no)}">
+    <label>日期（起飛當地日期）</label><input name="flight_date" type="date" required value="${esc(row.flight_date || '')}">
+    <div class="btns"><button type="button" id="lookup">自動查詢起降資料</button></div><div class="sub" id="lkst">只填航班編號和日期，儲存時會自動帶入。</div>
+    <details ${row.dep_airport ? 'open' : ''}><summary>起降資訊（可手動修改或補充）</summary>${FORMS.flights.fields.map(f => fieldHtml(f, row[f[0]])).join('')}</details>`;
+}
+const flightMsg = err => ({ no_key: '尚未設定航班查詢金鑰，請手動填入起降資訊', not_found: '查不到這個航班，請確認編號與日期，或手動填入', local: '本機模式無法自動查詢，請手動填入', bad_input: '航班編號或日期格式不對' }[err] || '航班查詢功能目前無法使用，請手動填入');
+async function lookupFlight(no, date) {
+  if (!sb) return { error: 'local' };
+  if (!no || !date) return { error: 'bad_input' };
+  try { const { data, error } = await sb.functions.invoke('tw-api', { body: { action: 'flight', no, date } }); return error ? { error: 'fn' } : data; }
+  catch (e) { return { error: 'fn' }; }
+}
+function mapName(u) {
+  try {
+    const x = new URL(u), m = x.pathname.match(/\/maps\/place\/([^/@]+)/);
+    if (m) return decodeURIComponent(m[1].replace(/\+/g, ' '));
+    const q = x.searchParams.get('q') || x.searchParams.get('query');
+    if (q && !/^-?\d+(\.\d+)?,/.test(q)) return q;
+  } catch (e) {}
+  return null;
+}
+async function resolveMap(u) {
+  const n = mapName(u); if (n) return n;
+  if (!sb) return null;
+  try {
+    const { data } = await sb.functions.invoke('tw-api', { body: { action: 'map', url: u } });
+    return (data?.url && mapName(data.url)) || data?.title || null;
+  } catch (e) { return null; }
+}
+function wireForm(t) {
+  if (t === 'restaurants') {
+    const u = $('[name=map_url]'), n = $('[name=name]');
+    const go = async () => {
+      if (!u.value || n.value) return;
+      $('#mapst').textContent = '解析中…';
+      const nm = await resolveMap(u.value);
+      if (nm && !n.value) { n.value = nm; $('#mapst').textContent = '已自動帶入餐廳名稱'; }
+      else $('#mapst').textContent = nm ? '' : '無法自動取得名稱，請手動輸入';
+    };
+    u.onchange = go; u.onpaste = () => setTimeout(go, 60);
+  }
+  if (t === 'flights') $('#lookup').onclick = async () => {
+    const no = $('[name=flight_no]').value, d = $('[name=flight_date]').value;
+    if (!no || !d) return toast('請先填航班編號與日期');
+    $('#lkst').textContent = '查詢中…';
+    const r = await lookupFlight(no, d);
+    if (r && !r.error) {
+      for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) $(`[name=${k}]`).value = r[k] || '';
+      $('#lkst').textContent = '已帶入' + (r.airline ? '（' + r.airline + '）' : ''); $('details').open = true;
+    } else $('#lkst').textContent = flightMsg(r?.error);
+  };
+}
+async function addPreset(kind) {
+  if (!canEdit()) return toast('離線中，目前只能查看');
+  const rows = PRESETS[kind].map(name => ({ id: crypto.randomUUID(), kind, name }));
+  state.check_cats.push(...rows); persist(); render();
+  if (sb) { const { error } = await sb.from('check_cats').insert(rows.map(r => ({ ...r, trip_id: TRIP }))); if (error) toast('新增失敗：' + error.message); await loadAll(); }
+}
+const SUBS = [['restaurants', '餐廳'], ['todo', '待辦事項'], ['prep', '行前準備'], ['docs', '旅行文件'], ['notes', '備忘']];
+const PRESETS = { todo: ['出發前', '旅途中'], prep: ['證件與機票', '衣物', '電子用品', '藥品盥洗'], docs: ['護照與簽證', '機票與住宿憑證', '保險'] };
 
 const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 function tripDays() {          // 旅程出發日～回程日自動展開，再加上行程裡出現過的日期
@@ -304,12 +457,16 @@ const views = {
       <li data-edit="itinerary:${r.id}"><span class="time">${esc(r.time || '')}</span><strong>${esc(r.title)}</strong>
       ${r.place ? `<div class="sub">${esc(r.place)}</div>` : ''}${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}</li>`).join('')}</ul>` : `<div class="empty small">這天還沒有安排，按右下角新增。</div>`) + add('itinerary');
   },
+  legCard(leg, title) {
+    const fl = state.flights.filter(f => (f.leg || 'out') === leg).sort((a, b) => (a.dep_time || a.flight_date || '').localeCompare(b.dep_time || b.flight_date || ''));
+    return `<div class="legcard"><h2>${title}<button class="mini" data-add="flights" data-leg="${leg}">＋ 航班</button></h2>` +
+      (fl.length ? fl.map(f => `<div class="fl" data-edit="flights:${f.id}"><div class="route">${esc(f.dep_airport || '—')}<span>✈</span>${esc(f.arr_airport || '—')}</div>
+        <div class="sub">${esc(f.flight_no || '')}${f.flight_date ? ' · ' + fmtDay(f.flight_date) : ''}${f.booking_ref ? ' · 訂位 ' + esc(f.booking_ref) : ''}</div>
+        <div class="sub">${fmtDT(f.dep_time)} → ${fmtDT(f.arr_time)}</div>${f.note ? `<p class="note">${esc(f.note)}</p>` : ''}</div>`).join('') : `<div class="empty small">還沒有${title}航班</div>`) + `</div>`;
+  },
   trip() {
-    const fl = [...state.flights].sort((a, b) => (a.dep_time || '').localeCompare(b.dep_time || ''));
     const lg = [...state.lodging].sort((a, b) => (a.check_in || '').localeCompare(b.check_in || ''));
-    return `<h2>航班<button class="mini" data-add="flights">＋ 新增</button></h2>` +
-      (fl.length ? fl.map(f => `<div class="row blk" data-edit="flights:${f.id}"><div class="route">${esc(f.dep_airport || '—')}<span>✈</span>${esc(f.arr_airport || '—')}</div>
-        <div class="sub">${esc(f.flight_no || '')}${f.booking_ref ? ' · 訂位代號 ' + esc(f.booking_ref) : ''}</div><div class="sub">${fmtDT(f.dep_time)} → ${fmtDT(f.arr_time)}</div>${f.note ? `<p class="note">${esc(f.note)}</p>` : ''}</div>`).join('') : `<div class="empty small">還沒有航班</div>`) +
+    return views.legCard('out', '去程') + views.legCard('in', '回程') +
       `<h2>住宿<button class="mini" data-add="lodging">＋ 新增</button></h2>` +
       (lg.length ? lg.map(l => { const n = l.check_in && l.check_out ? Math.round((new Date(l.check_out) - new Date(l.check_in)) / 864e5) : 0;
         return `<div class="row blk" data-edit="lodging:${l.id}"><strong>${esc(l.name)}</strong>
@@ -318,7 +475,24 @@ const views = {
         <div class="sub">${l.booking_ref ? '訂房編號 ' + esc(l.booking_ref) + ' ' : ''}${link(l.url)}</div>${l.note ? `<p class="note">${esc(l.note)}</p>` : ''}</div>`; }).join('') : `<div class="empty small">還沒有住宿</div>`);
   },
   info() {
-    if (!state.info.length) return `<div class="empty">簽證、保險、交通票券、緊急聯絡等資料放這裡。</div>` + add('info');
+    const chips = SUBS.map(([k, v]) => `<button class="dchip ${k === infoTab ? 'on' : ''}" data-sub="${k}"><span>${v}</span></button>`).join('');
+    return `<div class="days">${chips}</div>` + (infoTab === 'restaurants' ? views.restaurants() : infoTab === 'notes' ? views.notes() : views.checklist(infoTab));
+  },
+  restaurants() {
+    return (state.restaurants.length ? state.restaurants.map(r => `<div class="row blk" data-edit="restaurants:${r.id}"><strong>${esc(r.name)}</strong>${/^https?:\/\//.test(r.map_url || '') ? ` <a href="${esc(r.map_url)}" target="_blank" rel="noopener">📍 地圖</a>` : ''}
+      ${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}${filesView(r.id)}</div>`).join('') : `<div class="empty">還沒有餐廳，貼上 Google 地圖連結就能新增。</div>`) + add('restaurants');
+  },
+  checklist(kind) {
+    const cats = state.check_cats.filter(c => c.kind === kind), items = state.check_items.filter(i => i.kind === kind);
+    if (!cats.length) return `<div class="empty">還沒有類別，先新增一個類別再加項目。</div><div style="text-align:center"><button class="mini" data-preset="${kind}">加入建議類別</button></div>` + add('check_cats');
+    return `<div class="meta">已完成 ${items.filter(i => i.done).length} / ${items.length}</div>` + cats.map(c => {
+      const its = items.filter(i => i.cat_id === c.id);
+      return `<h3 class="cat"><span>${esc(c.name)} <small>${its.filter(i => i.done).length}/${its.length}</small></span><span><button class="mini" data-add="check_items" data-cat="${c.id}">＋ 項目</button> <button class="mini" data-edit="check_cats:${c.id}">✎</button></span></h3>` +
+        its.map(i => `<div class="row item ${i.done ? 'done' : ''}"><input type="checkbox" class="cb" data-toggle="${i.id}" ${i.done ? 'checked' : ''} aria-label="完成"><div class="tt" data-edit="check_items:${i.id}"><strong>${esc(i.title)}</strong>${i.note ? `<div class="note">${esc(i.note)}</div>` : ''}${filesView(i.id)}</div></div>`).join('');
+    }).join('') + add('check_cats');
+  },
+  notes() {
+    if (!state.info.length) return `<div class="empty">其他想記下來的資料放這裡。</div>` + add('info');
     const cats = [...new Set(state.info.map(r => r.category || '其他'))];
     return cats.map(c => `<h3>${esc(c)}</h3>${state.info.filter(r => (r.category || '其他') === c).map(r => `
       <div class="row blk" data-edit="info:${r.id}"><strong>${esc(r.title)}</strong>${r.content ? `<p class="note">${esc(r.content)}</p>` : ''}</div>`).join('')}`).join('') + add('info');
@@ -370,12 +544,25 @@ function render() {
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
   else if ('day' in el.dataset) { selDay = el.dataset.day; render(); }
+  else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
+  else if (el.dataset.preset) addPreset(el.dataset.preset);
+  else if (el.dataset.rmfile) rmFile(el.dataset.rmfile);
   else if (el.dataset.tab) { tab = el.dataset.tab; fresh = true; render(); scrollTo(0, 0); }
-  else if (el.dataset.add) openForm(el.dataset.add);
+  else if (el.dataset.add) {
+    const ex = {}; if (el.dataset.cat) ex.cat_id = el.dataset.cat; if (el.dataset.leg) ex.leg = el.dataset.leg;
+    if (el.dataset.add === 'check_items' || el.dataset.add === 'check_cats') ex.kind = infoTab;
+    openForm(el.dataset.add, null, ex);
+  }
   else { const [t, id] = el.dataset.edit.split(':'); openForm(t, id); }
+});
+document.addEventListener('change', e => {
+  const el = e.target.closest('[data-toggle]'); if (!el) return;
+  const r = state.check_items.find(x => x.id === el.dataset.toggle); if (!r) return;
+  if (!canEdit()) { el.checked = !el.checked; return toast('離線中，目前只能查看'); }
+  saveRow('check_items', { ...r, done: el.checked });
 });
 $('#back').onclick = () => { location.href = location.pathname; };
 $('#share').onclick = async () => {

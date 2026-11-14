@@ -6,11 +6,11 @@
 <title>旅行手帳</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
-:root{--bg:#f5f0de;--card:#fffdf4;--ink:#2b4a47;--mute:#6b8279;--sea:#3e8e9b;--sun:#f2b84b;--leaf:#5e9e6e;--line:#d9d3b8;--bad:#c0563f;--serif:"Hiragino Mincho ProN","Songti TC","Noto Serif TC",serif}
-@media (prefers-color-scheme:dark){:root{--bg:#16262a;--card:#1f3438;--ink:#eaf1e6;--mute:#9db5ab;--sea:#6fc0c8;--leaf:#86c28f;--line:#2f4a4d;--bad:#e98a73}}
+:root{--bg:#f5f0de;--card:#fffdf4;--ink:#2b4a47;--mute:#6b8279;--sea:#3a86b8;--sky:#bfe0ef;--sun:#f2b84b;--leaf:#5e9e6e;--line:#d9d3b8;--bad:#c0563f;--serif:"Hiragino Mincho ProN","Songti TC","Noto Serif TC",serif}
+@media (prefers-color-scheme:dark){:root{--bg:#16262a;--card:#1f3438;--ink:#eaf1e6;--mute:#9db5ab;--sea:#78b9e0;--sky:#1d3f57;--leaf:#86c28f;--line:#2f4a4d;--bad:#e98a73}}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}
-header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;background:var(--bg);border-bottom:1px solid var(--line)}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 header h1{flex:1;margin:0;font:700 1.2rem var(--serif);letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 header button,.mini{border:1px solid var(--line);background:var(--card);color:var(--sea);border-radius:999px;padding:4px 12px;font:inherit;font-size:.85rem}
 #sync{font-size:.78rem;color:var(--mute)}
@@ -26,10 +26,10 @@ nav button.on{background:var(--sun);color:#2b4a47}
 .fab{position:fixed;right:18px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:54px;height:54px;border-radius:50%;border:0;background:var(--sun);color:#2b4a47;font-size:1.8rem;line-height:1;box-shadow:0 3px 10px rgba(43,74,71,.3);animation:float 3.5s ease-in-out infinite}
 .home .fab{bottom:calc(22px + env(safe-area-inset-bottom,0px))}
 /* hero scene */
-.hero{position:relative;border-radius:18px;overflow:hidden;margin-bottom:10px;height:92px}
-.hero.big{height:200px}
+.hero{position:relative;border-radius:22px;overflow:hidden;margin-bottom:10px;height:100px;box-shadow:0 8px 22px rgba(58,134,184,.22)}
+.hero.big{height:230px}
 .hero svg{display:block;width:100%;height:100%}
-.hl{position:absolute;left:18px;top:18px;color:#2b4a47}
+.hl{position:absolute;left:18px;top:18px;color:#fff;text-shadow:0 1px 8px rgba(20,60,100,.5)}
 .hl h1{margin:0;font:800 2rem var(--serif);letter-spacing:.1em}
 .hl p{margin:2px 0 0;font-size:.95rem}
 .cl{fill:#fffdf6;animation:drift 24s ease-in-out infinite alternate}
@@ -49,7 +49,7 @@ h2 .mini{margin-left:auto}
 h3{margin:20px 0 6px;font-size:.95rem;color:var(--mute)}
 .meta{color:var(--mute);font-size:.9rem;margin:0 2px 4px}
 .rail{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px dashed var(--leaf)}
-.rail li,.row{background:var(--card);border-radius:12px;padding:10px 12px;margin:8px 0;cursor:pointer;position:relative;box-shadow:0 1px 0 var(--line);transition:transform .15s}
+.rail li,.row{background:var(--card);border-radius:14px;padding:10px 12px;margin:8px 0;cursor:pointer;position:relative;box-shadow:0 1px 0 var(--line),0 6px 16px rgba(58,134,184,.09);transition:transform .15s}
 .rail li:active,.row:active,.trip:active{transform:scale(.98)}
 .rail li::before{content:"";position:absolute;left:-22px;top:18px;width:10px;height:10px;border-radius:50%;background:var(--sun);border:2px solid var(--bg)}
 .time{font-weight:700;color:var(--sea);margin-right:8px}
@@ -97,6 +97,12 @@ details{margin-top:10px}summary{color:var(--sea);font-size:.9rem}
 .leg .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 12px;border-radius:999px;border:1px dashed var(--line);background:var(--card)}
 .leg.set .pill{border:1px solid var(--leaf);color:var(--ink)}
 .catbar{display:flex;gap:8px;justify-content:flex-end;margin:2px 0 0}
+body{background-image:linear-gradient(180deg,var(--sky) 0,var(--bg) 360px);background-repeat:no-repeat}
+.isl{animation:isl 9s ease-in-out infinite}
+.sd{animation:seed 9s linear infinite}
+@keyframes isl{50%{transform:translateY(-6px)}}
+@keyframes seed{0%{transform:translate(0,0);opacity:0}15%{opacity:.9}100%{transform:translate(36px,-60px);opacity:0}}
+.empty:not(.small)::before{content:"";display:block;height:70px;margin-bottom:8px;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 64'><ellipse cx='40' cy='40' rx='26' ry='7' fill='%2374b36d'/><path d='M14 40Q20 52 30 58Q40 70 46 56Q56 50 66 40Z' fill='%238c7b66'/><rect x='44' y='28' width='3' height='12' fill='%236e5a43'/><circle cx='46' cy='27' r='9' fill='%233f8a58'/><ellipse cx='16' cy='14' rx='12' ry='5' fill='%23ffffff' fill-opacity='.9'/><ellipse cx='64' cy='10' rx='10' ry='4' fill='%23ffffff' fill-opacity='.9'/></svg>") center/contain no-repeat}
 /* trip cards */
 .trip{position:relative;display:flex;flex-direction:column;background:var(--card);border-radius:16px;overflow:hidden;margin:12px 0;cursor:pointer;box-shadow:0 2px 0 var(--line);transition:transform .15s}
 .trip .art{display:block;width:100%;height:76px}
@@ -192,7 +198,7 @@ async function purgeFiles(ids) {
   state.tw_files = state.tw_files.filter(f => !ids.includes(f.owner_id));
 }
 async function delRow(t, id) {
-  if (t === 'restaurants' || t === 'check_items') await purgeFiles([id]);
+  if (t === 'restaurants' || t === 'check_items' || t === 'itinerary') await purgeFiles([id]);
   if (t === 'check_cats') {
     if (state.check_cats.find(c => c.id === id)?.kind === 'restaurants') {
       state.restaurants.forEach(r => { if (r.cat_id === id) r.cat_id = null; });
@@ -299,25 +305,37 @@ $('#frm').onsubmit = async e => {
     const files = [...($('#files')?.files || [])];
     $('#dlg').close();
     await saveRow(cur.t, row);
-    if (files.length) { toast('附件上傳中…'); await uploadFiles(cur.t, row.id, files); await loadAll(); toast('附件已上傳'); }
+    if (files.length) { toast('附件上傳中…'); await uploadFiles(cur.variant === 'transport' ? 'transport' : cur.t, row.id, files); await loadAll(); toast('附件已上傳'); }
   } finally { saving = false; }
 };
 
 /* ===== 插圖 ===== */
-const scene = () => `<svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-<defs><linearGradient id="sk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7dc4e8"/><stop offset="1" stop-color="#e6f4ef"/></linearGradient></defs>
-<rect width="400" height="200" fill="url(#sk)"/>
-<circle cx="325" cy="52" r="42" fill="#fbe29a" opacity=".35"/><circle cx="325" cy="52" r="24" fill="#fbe29a"/>
-<g class="cl"><ellipse cx="80" cy="52" rx="36" ry="12"/><ellipse cx="102" cy="43" rx="22" ry="14"/><ellipse cx="60" cy="45" rx="20" ry="11"/></g>
-<g class="cl b"><ellipse cx="240" cy="30" rx="30" ry="9"/><ellipse cx="256" cy="23" rx="17" ry="10"/></g>
-<g class="cl c"><ellipse cx="170" cy="92" rx="26" ry="8"/><ellipse cx="182" cy="86" rx="15" ry="9"/></g>
-<g transform="translate(250 82)"><g class="bob"><ellipse rx="15" ry="18" fill="#f2a7a0"/><ellipse rx="6" ry="18" fill="#fffdf6"/><path d="M-7 16L-4 27H4L7 16" fill="none" stroke="#8a6a4f" stroke-width="1.2"/><rect x="-5" y="27" width="10" height="7" rx="1.5" fill="#a9825f"/></g></g>
-<path d="M0 148Q80 108 170 138T400 122V200H0Z" fill="#8cc084"/>
-<path d="M0 176Q100 140 210 168T400 158V200H0Z" fill="#5e9e6e"/>
-<path d="M44 160l6-16 6 16zM60 162l5-12 5 12z" fill="#3f7d57"/></svg>`;
+const cloud = (x, y, k, c = '') => `<g transform="translate(${x} ${y}) scale(${k})"><g class="cl ${c}"><ellipse cx="0" cy="9" rx="48" ry="9" fill="#d3e4f0"/><ellipse cx="-4" cy="0" rx="44" ry="13"/><ellipse cx="16" cy="-10" rx="25" ry="15"/><ellipse cx="-22" cy="-5" rx="20" ry="12"/></g></g>`;
+const island = (x, y, k) => `<g transform="translate(${x} ${y}) scale(${k})"><g class="isl">
+<path d="M-62 0Q-56 22-40 34Q-28 54-10 72Q0 88 8 70Q20 52 36 36Q54 20 60 0Z" fill="#8c7b66"/>
+<path d="M10 4Q22 30 8 70Q20 52 36 36Q54 20 60 0Z" fill="#6f6252"/>
+<path d="M-30 20Q-34 40-26 52M0 30Q-4 50 2 62M24 22Q30 40 22 54" stroke="#5f8a4e" stroke-width="2" fill="none"/>
+<ellipse cx="0" cy="0" rx="64" ry="11" fill="#74b36d"/>
+<rect x="-34" y="-36" width="14" height="36" fill="#d6cdb6"/><rect x="-37" y="-41" width="20" height="6" fill="#c3b99f"/><rect x="-30" y="-24" width="5" height="8" fill="#8c7b66"/>
+<rect x="-14" y="-18" width="22" height="18" fill="#cfc6b0"/><rect x="-9" y="-10" width="6" height="10" fill="#8c7b66"/>
+<rect x="24" y="-22" width="5" height="22" fill="#6e5a43"/><circle cx="26" cy="-34" r="15" fill="#3f8a58"/><circle cx="14" cy="-26" r="10" fill="#4d9c63"/><circle cx="38" cy="-26" r="10" fill="#4d9c63"/>
+</g></g>`;
+const seeds = [[40, 150, 0], [90, 120, -3], [150, 160, -5], [220, 140, -2], [300, 170, -7], [350, 130, -4]].map(([x, y, d]) => `<circle class="sd" cx="${x}" cy="${y}" r="1.7" fill="#fffdf6" style="animation-delay:${d}s"/>`).join('');
+const scene = (k = 'big') => {
+  const H = k === 'big' ? 220 : 100;
+  const hills = k === 'big'
+    ? `<path d="M0 168Q80 128 170 158T400 142V220H0Z" fill="#8cc084"/><path d="M0 196Q100 160 210 188T400 178V220H0Z" fill="#5e9e6e"/><path d="M44 190l6-16 6 16zM60 192l5-12 5 12z" fill="#3f7d57"/>`
+    : `<path d="M0 78Q90 56 190 74T400 66V100H0Z" fill="#8cc084"/><path d="M0 92Q110 74 220 88T400 82V100H0Z" fill="#5e9e6e"/>`;
+  const things = k === 'big' ? cloud(60, 112, 1) + cloud(215, 30, .8, 'b') + island(268, 64, .9) + cloud(130, 150, 1.2, 'c') + seeds : cloud(70, 34, .6) + island(290, 38, .36) + cloud(185, 22, .45, 'b');
+  return `<svg viewBox="0 0 400 ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><linearGradient id="sk${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fa8e0"/><stop offset=".6" stop-color="#bfe3f0"/><stop offset="1" stop-color="#eaf6ee"/></linearGradient><radialGradient id="sn${k}"><stop offset="0" stop-color="#fff6cf"/><stop offset="1" stop-color="#fff6cf" stop-opacity="0"/></radialGradient></defs>
+<rect width="400" height="${H}" fill="url(#sk${k})"/><circle cx="330" cy="30" r="70" fill="url(#sn${k})"/>
+<g fill="#fff" opacity=".12"><polygon points="330,30 240,${H} 285,${H}"/><polygon points="330,30 300,${H} 345,${H}"/><polygon points="330,30 170,${H} 205,${H}"/></g>
+${things}${hills}</svg>`;
+};
 const PALS = [['#8ec9e8', '#fbe29a', '#8cc084'], ['#f6c7a4', '#fff1c9', '#7fa77a'], ['#a9c8e8', '#fffdf6', '#6aa58b'], ['#c9b8e0', '#fbe29a', '#7faf9a']];
 const hash = s => [...s].reduce((a, c) => a + c.charCodeAt(0), 0);
-const art = id => { const p = PALS[hash(id) % PALS.length]; return `<svg class="art" viewBox="0 0 200 76" preserveAspectRatio="xMidYMid slice"><rect width="200" height="76" fill="${p[0]}"/><circle cx="160" cy="26" r="13" fill="${p[1]}"/><path d="M0 56Q50 32 100 52T200 44V76H0Z" fill="${p[2]}"/></svg>`; };
+const art = id => { const k = hash(id), p = PALS[k % PALS.length];
+  return `<svg class="art" viewBox="0 0 200 76" preserveAspectRatio="xMidYMid slice"><rect width="200" height="76" fill="${p[0]}"/><circle cx="168" cy="20" r="11" fill="${p[1]}"/>${cloud(40, 26, .4)}${k % 2 ? island(128, 22, .3) : cloud(120, 34, .35, 'b')}<path d="M0 58Q50 36 100 54T200 46V76H0Z" fill="${p[2]}"/></svg>`; };
 
 /* ===== 畫面 ===== */
 const add = t => `<button class="fab" data-add="${t}" aria-label="新增">＋</button>`;
@@ -339,9 +357,10 @@ const fileUrl = p => `${CONFIG.SUPABASE_URL}/storage/v1/object/public/tw-files/$
 const fileChip = f => /^image\//.test(f.mime || '')
   ? `<a href="${esc(fileUrl(f.path))}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(fileUrl(f.path))}" alt="${esc(f.name)}"></a>`
   : `<a class="file" href="${esc(fileUrl(f.path))}" target="_blank" rel="noopener">📄 ${esc(f.name || '檔案')}</a>`;
-const filesView = id => { const fs = state.tw_files.filter(f => f.owner_id === id); return fs.length ? `<div class="thumbs">${fs.map(fileChip).join('')}</div>` : ''; };
-const filesHtml = id => { const fs = state.tw_files.filter(f => f.owner_id === id); return fs.length ? `<div class="thumbs">${fs.map(f => `<span class="fwrap">${fileChip(f)}<button type="button" class="x" data-rmfile="${f.id}" aria-label="刪除附件">✕</button></span>`).join('')}</div>` : '<div class="sub">尚無附件</div>'; };
-const attHtml = id => `<label>附件（照片、PDF，單檔 10MB 內）</label><div id="flist">${filesHtml(id)}</div>` +
+const filesOf = (id, tbl) => state.tw_files.filter(f => f.owner_id === id && (!tbl || f.owner_table === tbl));
+const filesView = id => { const fs = filesOf(id); return fs.length ? `<div class="thumbs">${fs.map(fileChip).join('')}</div>` : ''; };
+const filesHtml = (id, tbl) => { const fs = filesOf(id, tbl); return fs.length ? `<div class="thumbs">${fs.map(f => `<span class="fwrap">${fileChip(f)}<button type="button" class="x" data-rmfile="${f.id}" aria-label="刪除附件">✕</button></span>`).join('')}</div>` : '<div class="sub">尚無附件</div>'; };
+const attHtml = (id, tbl) => `<label>附件（照片、PDF，單檔 10MB 內）</label><div id="flist">${filesHtml(id, tbl)}</div>` +
   (sb ? `<input type="file" id="files" multiple accept="image/*,application/pdf" style="margin-top:8px">` : `<div class="sub">連線雲端後才能上傳附件</div>`);
 function shrink(f) {
   return new Promise(res => {
@@ -373,7 +392,7 @@ async function rmFile(id) {
   if (!f || !canEdit() || !confirm('刪除這個附件？')) return;
   if (sb) { await sb.storage.from('tw-files').remove([f.path]); await sb.from('tw_files').delete().eq('id', id); }
   state.tw_files = state.tw_files.filter(x => x.id !== id); persist();
-  if ($('#flist')) $('#flist').innerHTML = filesHtml(cur.newId);
+  if ($('#flist')) $('#flist').innerHTML = filesHtml(cur.newId, cur.variant === 'transport' ? 'transport' : undefined);
   render();
 }
 function flightForm(row) {
@@ -446,7 +465,7 @@ const fmtMins = m => m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ' ' + (m 
 const dayRows = () => state.itinerary.filter(r => (r.day || '') === selDay).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 const placeOf = r => [r?.place || r?.title, curTrip()?.dest].filter(Boolean).join(' ');
 const gmapUrl = (mode, from, to) => `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=${GMODE[mode] || 'transit'}`;
-const legHtml = r => { const m = MODES[r.mode]; return `<li class="leg ${m ? 'set' : ''}" data-trans="${r.id}"><span class="pill">${m ? m[0] + ' ' + m[1] + (r.mins ? ' · 約 ' + fmtMins(r.mins) : '') : '＋ 交通方式'}</span></li>`; };
+const legHtml = r => { const m = MODES[r.mode], n = filesOf(r.id, 'transport').length; return `<li class="leg ${m ? 'set' : ''}" data-trans="${r.id}"><span class="pill">${m ? m[0] + ' ' + m[1] + (r.mins ? ' · 約 ' + fmtMins(r.mins) : '') + (r.trans_note ? ' 📝' : '') + (n ? ' 📎' + n : '') : '＋ 交通方式'}</span></li>`; };
 let geoNet = false;
 async function geocode(q) {
   const k = 'tw:geo:' + q, c = localStorage.getItem(k); if (c) return JSON.parse(c);
@@ -469,13 +488,25 @@ async function estimate(mode, from, to) {
   } catch (e) { return { error: '目前無法估算（需要網路），請手動輸入時間' }; }
 }
 function transportForm(row, prev) {
-  const opts = Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === row.mode ? 'selected' : ''}>${v[0]} ${v[1]}</option>`).join('');
+  const opts = Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === (row.mode || 'car') ? 'selected' : ''}>${v[0]} ${v[1]}</option>`).join('');
   return `<div class="sub">${esc(prev?.place || prev?.title || '')} → ${esc(row.place || row.title)}</div>
-    <label>交通方式</label><select name="mode" id="tmode"><option value="">（不設定）</option>${opts}</select>
+    <label>交通方式</label><select name="mode" id="tmode"><option value="">（不設定，移除交通）</option>${opts}</select>
     <label>預估時間（分鐘）</label><input name="mins" id="tmins" type="number" min="0" step="1" value="${esc(row.mins ?? '')}">
     <div class="btns"><button type="button" id="est">自動估算</button></div>
     <div class="sub" id="eststat">自動估算是依兩地直線距離粗估，實際時間請以 Google 地圖為準。</div>
-    <p><a id="gmap" target="_blank" rel="noopener">在 Google 地圖查詳細路線 ↗</a></p>`;
+    <p><a id="gmap" target="_blank" rel="noopener">在 Google 地圖查詳細路線 ↗</a></p>
+    <label>備註（班次、車資、停車場…）</label><textarea name="trans_note">${esc(row.trans_note)}</textarea>
+    ${attHtml(row.id, 'transport')}`;
+}
+const transTap = id => { const r = state.itinerary.find(x => x.id === id); if (r?.mode) openTransport(id); else quickTransport(id); };
+async function quickTransport(id) {            // 第一次點選：直接設為開車，不跳出選單
+  if (!canEdit()) return toast('離線中，目前只能查看');
+  const rows = dayRows(), i = rows.findIndex(r => r.id === id); if (i < 1) return;
+  const prev = rows[i - 1], row = { ...rows[i], mode: 'car' };
+  saveRow('itinerary', row);
+  const est = await estimate('car', placeOf(prev), placeOf(row));
+  const now = state.itinerary.find(r => r.id === id);
+  if (est.mins && now && now.mode === 'car' && !now.mins) saveRow('itinerary', { ...now, mins: est.mins });
 }
 function openTransport(id) {
   if (!canEdit()) return toast('離線中，目前只能查看');
@@ -512,7 +543,7 @@ function tripDays() {          // 旅程出發日～回程日自動展開，再�
 const views = {
   home() {
     const rows = [...trips].sort((a, b) => (a.start_day || '9').localeCompare(b.start_day || '9'));
-    return `<div class="hero big">${scene()}<div class="hl"><h1>旅行手帳</h1><p>今天，要去哪裡呢？</p></div></div>` +
+    return `<div class="hero big">${scene('big')}<div class="hl"><h1>旅行手帳</h1><p>今天，要去哪裡呢？</p></div></div>` +
       (rows.length ? rows.map((t, i) => `<div class="trip" style="--i:${i + 1}" data-go="${esc(t.id)}">${art(t.id)}<span class="badge">${countdown(t) || '尚未排日期'}</span><button class="ed" data-edit="tw_trips:${esc(t.id)}" aria-label="編輯">✎</button>
         <div class="tb"><strong>${esc(t.name)}</strong><div class="sub">${esc(t.dest || '')} ${range(t)}</div></div></div>`).join('')
         : `<div class="empty">還沒有旅程，按右下角出發吧。</div>`) + add('tw_trips');
@@ -621,7 +652,7 @@ function render() {
   $('#ttl').textContent = TRIP ? (t?.name || '旅程') : '旅行手帳';
   document.title = TRIP ? (t?.name || '旅程') + ' · 旅行手帳' : '旅行手帳';
   $('#tabs').innerHTML = TRIP ? Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${v}</button>`).join('') : '';
-  const head = TRIP ? `<div class="hero">${scene()}</div>${t ? `<div class="meta">${esc(t.dest || '')} ${range(t)} ${countdown(t) ? '· ' + countdown(t) : ''}</div>` : ''}` : '';
+  const head = TRIP ? `<div class="hero">${scene('small')}</div>${t ? `<div class="meta">${esc(t.dest || '')} ${range(t)} ${countdown(t) ? '· ' + countdown(t) : ''}</div>` : ''}` : '';
   const v = $('#view');
   v.className = fresh ? 'in' : '';
   v.innerHTML = head + (TRIP ? views[tab]() : views.home());
@@ -636,7 +667,7 @@ document.addEventListener('click', e => {
   else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
   else if (el.dataset.preset) addPreset(el.dataset.preset);
   else if (el.dataset.rmfile) rmFile(el.dataset.rmfile);
-  else if (el.dataset.trans) openTransport(el.dataset.trans);
+  else if (el.dataset.trans) transTap(el.dataset.trans);
   else if (el.dataset.tab) { tab = el.dataset.tab; fresh = true; render(); scrollTo(0, 0); }
   else if (el.dataset.add) {
     const ex = {}; if (el.dataset.cat) ex.cat_id = el.dataset.cat; if (el.dataset.leg) ex.leg = el.dataset.leg;

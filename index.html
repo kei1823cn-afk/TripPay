@@ -278,7 +278,7 @@ $('#frm').onsubmit = async e => {
         if (e.submitter) e.submitter.textContent = '查詢中…';
         const r = await lookupFlight(row.flight_no, row.flight_date);
         if (r && !r.error) { for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) row[k] = r[k] || row[k]; }
-        else toast(flightMsg(r?.error));
+        else toast(flightMsg(r?.error, r?.detail));
       }
     }
     const files = [...($('#files')?.files || [])];
@@ -367,7 +367,7 @@ function flightForm(row) {
     <div class="btns"><button type="button" id="lookup">自動查詢起降資料</button></div><div class="sub" id="lkst">只填航班編號和日期，儲存時會自動帶入。</div>
     <details ${row.dep_airport ? 'open' : ''}><summary>起降資訊（可手動修改或補充）</summary>${FORMS.flights.fields.map(f => fieldHtml(f, row[f[0]])).join('')}</details>`;
 }
-const flightMsg = err => ({ no_key: '尚未設定航班查詢金鑰，請手動填入起降資訊', not_found: '查不到這個航班，請確認編號與日期，或手動填入', local: '本機模式無法自動查詢，請手動填入', bad_input: '航班編號或日期格式不對' }[err] || '航班查詢功能目前無法使用，請手動填入');
+const flightMsg = (err, detail) => ({ no_key: '尚未設定航班查詢金鑰，請手動填入起降資訊', not_found: '查不到這個航班，請確認編號與日期，或手動填入', local: '本機模式無法自動查詢，請手動填入', bad_input: '航班編號或日期格式不對', fn: '查詢功能沒有回應，請手動填入' }[err] || `航班查詢失敗（${err || '未知'}${detail ? '：' + String(detail).slice(0, 80) : ''}），請手動填入`);
 async function lookupFlight(no, date) {
   if (!sb) return { error: 'local' };
   if (!no || !date) return { error: 'bad_input' };
@@ -411,7 +411,7 @@ function wireForm(t) {
     if (r && !r.error) {
       for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) $(`[name=${k}]`).value = r[k] || '';
       $('#lkst').textContent = '已帶入' + (r.airline ? '（' + r.airline + '）' : ''); $('details').open = true;
-    } else $('#lkst').textContent = flightMsg(r?.error);
+    } else $('#lkst').textContent = flightMsg(r?.error, r?.detail);
   };
 }
 async function addPreset(kind) {

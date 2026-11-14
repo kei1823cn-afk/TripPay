@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>旅行手帳</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#eaf0ef;--card:#fbfdfc;--ink:#17313e;--mute:#5d7480;--sea:#2c6e7f;--sun:#f2b33d;--line:#c9d6d4;--bad:#b4412f}
+@media (prefers-color-scheme:dark){:root{--bg:#10202a;--card:#172b37;--ink:#e6efef;--mute:#8fa6b0;--sea:#5fb0c2;--sun:#f2b33d;--line:#2a4351;--bad:#e5806e}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;background:var(--bg);border-bottom:1px solid var(--line)}
+header h1{flex:1;margin:0;font-size:1.25rem;letter-spacing:.04em}
+#sync{font-size:.8rem;color:var(--mute)}
+#sync::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--sea);margin-right:6px}
+#sync.off::before{background:var(--sun)}
+header button{border:1px solid var(--line);background:none;color:var(--sea);border-radius:8px;padding:4px 10px;font:inherit;font-size:.85rem}
+main{max-width:640px;margin:0 auto;padding:16px 16px calc(150px + env(safe-area-inset-bottom,0px))}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;border:0;background:none;color:var(--mute);padding:14px 0;font:inherit;font-weight:600;border-top:3px solid transparent}
+nav button.on{color:var(--ink);border-top-color:var(--sun)}
+.fab{position:fixed;right:18px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:52px;height:52px;border-radius:50%;border:0;background:var(--sun);color:#17313e;font-size:1.8rem;line-height:1;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+h2{margin:26px 0 8px;font-size:1.5rem;line-height:1.2}
+h2 small{font-size:.9rem;font-weight:400;color:var(--mute);margin-left:8px}
+h3{margin:22px 0 6px;font-size:1rem;color:var(--mute)}
+.rail{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--sea)}
+.rail li,.row{background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0;cursor:pointer;position:relative}
+.rail li::before{content:"";position:absolute;left:-22px;top:18px;width:10px;height:10px;border-radius:50%;background:var(--bg);border:2px solid var(--sea)}
+.time{font-weight:700;color:var(--sea);margin-right:8px}
+.sub{color:var(--mute);font-size:.88rem}
+.note{margin:4px 0 0;white-space:pre-wrap;font-size:.92rem}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.row .amt{text-align:right;font-weight:700;white-space:nowrap}
+.empty{color:var(--mute);padding:28px 8px;text-align:center}
+table{width:100%;border-collapse:collapse;background:var(--card);border-radius:10px;overflow:hidden}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{font-size:.85rem;color:var(--mute);font-weight:600}
+.pos{color:var(--sea)}.neg{color:var(--bad)}
+.total{font-size:2rem;font-weight:800;margin:10px 0 0}
+dialog{width:min(520px,calc(100% - 24px));max-height:88vh;border:0;border-radius:14px;padding:18px;background:var(--card);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+label{display:block;margin:10px 0 2px;font-size:.88rem;color:var(--mute)}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+textarea{min-height:80px}
+.chk{display:flex;flex-wrap:wrap;gap:6px 14px}
+.chk label{display:flex;align-items:center;gap:6px;margin:0;color:var(--ink)}
+.chk input{width:auto}
+.btns{display:flex;gap:8px;margin-top:16px}
+.btns button{flex:1;padding:10px;border-radius:8px;border:1px solid var(--line);background:none;color:var(--ink);font:inherit}
+.btns .go{background:var(--sea);border-color:var(--sea);color:#fff;font-weight:700}
+.btns .del{color:var(--bad)}
+#toast{position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:.9rem;display:none;z-index:20}
+</style>
+</head>
+<body>
+<header><h1 id="ttl">旅行手帳</h1><span id="sync"></span><button id="share">分享</button></header>
+<main id="view"></main>
+<nav id="tabs"></nav>
+<dialog id="dlg"><form id="frm"></form></dialog>
+<div id="toast"></div>
+
+<script>
+/* ===== 設定：填入 Supabase 後即啟用雲端同步；留空則為本機模式 ===== */
+const CONFIG = {
+  SUPABASE_URL: 'https://kadmtabkxzzytxyodbhf.supabase.co',
+  SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImthZG10YWJreHp6eXR4eW9kYmhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzMDU0ODgsImV4cCI6MjEwOTg4MTQ4OH0.K0ZT8nsJDb-H4SWQC9GcmtHlizR8qkKxuiQKXNIlmL4',
+  TRIP_NAME: '旅行手帳'
+};
+const DEFAULT_RATES = { TWD: 1, JPY: 0.21, KRW: 0.023, USD: 32, EUR: 35, THB: 0.9, HKD: 4.1 };
+
+/* ===== 基本狀態 ===== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TABLES = ['itinerary', 'info', 'members', 'expenses'];
+const TABS = { itinerary: '行程', info: '資訊', money: '記帳', members: '成員' };
+const TRIP = new URLSearchParams(location.search).get('trip') || localStorage.getItem('tw:trip') || 'demo';
+localStorage.setItem('tw:trip', TRIP);
+const KEY = 'tw:data:' + TRIP;
+const CONFIGURED = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_KEY);
+const sb = (CONFIGURED && window.supabase) ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
+let online = false;           // 雲端模式下，是否已成功連線
+let tab = 'itinerary';
+let state = { itinerary: [], info: [], members: [], expenses: [] };
+try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+
+const persist = () => localStorage.setItem(KEY, JSON.stringify(state));
+const canEdit = () => !CONFIGURED || online;
+const mname = id => state.members.find(m => m.id === id)?.name || '(已刪除)';
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2200); }
+function setSync() {
+  const s = $('#sync');
+  s.textContent = !CONFIGURED ? '本機模式' : online ? '已同步' : '離線，唯讀';
+  s.className = (!CONFIGURED || !online) ? 'off' : '';
+}
+
+/* ===== 資料層（雲端 / 本機共用介面） ===== */
+async function loadAll() {
+  if (sb) {
+    try {
+      const res = await Promise.all(TABLES.map(t => sb.from(t).select('*').eq('trip_id', TRIP)));
+      res.forEach((r, i) => { if (r.error) throw r.error; state[TABLES[i]] = r.data; });
+      persist(); online = true;
+    } catch (e) { online = false; }
+  }
+  setSync(); render();
+}
+async function saveRow(t, row) {
+  if (sb) {
+    const { error } = await sb.from(t).upsert({ ...row, trip_id: TRIP });
+    if (error) return toast('儲存失敗：' + error.message);
+    return loadAll();
+  }
+  const i = state[t].findIndex(r => r.id === row.id);
+  if (i >= 0) state[t][i] = row; else state[t].push(row);
+  persist(); render();
+}
+async function delRow(t, id) {
+  if (sb) {
+    const { error } = await sb.from(t).delete().eq('id', id);
+    if (error) return toast('刪除失敗：' + error.message);
+    return loadAll();
+  }
+  state[t] = state[t].filter(r => r.id !== id);
+  persist(); render();
+}
+function subscribe() {
+  if (!sb) return;
+  let ch = sb.channel('trip-' + TRIP);
+  TABLES.forEach(t => { ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: t, filter: 'trip_id=eq.' + TRIP }, loadAll); });
+  ch.subscribe();
+}
+
+/* ===== 表單定義 ===== */
+const FORMS = {
+  itinerary: { title: '行程', fields: [['day','date','日期'],['time','time','時間'],['title','text','活動'],['place','text','地點'],['note','textarea','備註']] },
+  info:      { title: '資訊', fields: [['category','text','分類（例如：住宿、交通）'],['title','text','標題'],['content','textarea','內容']] },
+  members:   { title: '成員', fields: [['name','text','名稱']] },
+  expenses:  { title: '支出' }
+};
+function fieldHtml([k, type, label], v) {
+  const val = esc(v ?? '');
+  const input = type === 'textarea' ? `<textarea name="${k}">${val}</textarea>` : `<input name="${k}" type="${type}" value="${val}" ${k === 'title' || k === 'name' ? 'required' : ''}>`;
+  return `<label>${label}</label>${input}`;
+}
+function formHtml(t, row) {
+  if (t !== 'expenses') return FORMS[t].fields.map(f => fieldHtml(f, row[f[0]])).join('');
+  const cur = row.currency || 'TWD';
+  const rate = row.rate ?? DEFAULT_RATES[cur] ?? 1;
+  const split = row.split?.length ? row.split : state.members.map(m => m.id);
+  const opts = (arr, sel) => arr.map(([v, l]) => `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  return `
+    <label>項目</label><input name="title" required value="${esc(row.title)}">
+    <label>日期</label><input name="day" type="date" value="${esc(row.day || new Date().toISOString().slice(0, 10))}">
+    <label>金額</label><input name="amount" type="number" step="any" required value="${esc(row.amount)}">
+    <label>幣別</label><select name="currency" id="cur">${opts(Object.keys(DEFAULT_RATES).map(c => [c, c]), cur)}</select>
+    <label>匯率（1 單位 = 多少台幣）</label><input name="rate" id="rate" type="number" step="any" value="${rate}">
+    <label>付款人</label><select name="payer">${opts(state.members.map(m => [m.id, m.name]), row.payer)}</select>
+    <label>分攤成員</label><div class="chk">${state.members.map(m => `<label><input type="checkbox" name="split" value="${m.id}" ${split.includes(m.id) ? 'checked' : ''}>${esc(m.name)}</label>`).join('')}</div>`;
+}
+let cur = null;
+function openForm(t, id) {
+  if (!canEdit()) return toast('離線中，目前只能查看');
+  if (t === 'expenses' && !state.members.length) { toast('請先到「成員」新增成員'); return; }
+  const row = id ? state[t].find(r => r.id === id) : {};
+  cur = { t, id };
+  $('#frm').innerHTML = `<h3 style="margin:0">${id ? '編輯' : '新增'}${FORMS[t].title}</h3>${formHtml(t, row)}
+    <div class="btns">${id ? '<button type="button" class="del" id="del">刪除</button>' : ''}<button type="button" id="cancel">取消</button><button class="go">儲存</button></div>`;
+  $('#cancel').onclick = () => $('#dlg').close();
+  if ($('#del')) $('#del').onclick = async () => { if (confirm('確定刪除？')) { await delRow(t, id); $('#dlg').close(); } };
+  if ($('#cur')) $('#cur').onchange = e => { $('#rate').value = DEFAULT_RATES[e.target.value] ?? 1; };
+  $('#dlg').showModal();
+}
+$('#frm').onsubmit = async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target), row = {};
+  for (const [k, v] of fd.entries()) if (k !== 'split') row[k] = v === '' ? null : v;
+  if (cur.t === 'expenses') { row.split = fd.getAll('split'); row.amount = +row.amount; row.rate = +row.rate || 1; }
+  row.id = cur.id || crypto.randomUUID();
+  await saveRow(cur.t, row);
+  $('#dlg').close();
+};
+
+/* ===== 畫面 ===== */
+const add = t => `<button class="fab" data-add="${t}" aria-label="新增">＋</button>`;
+const fmtDay = d => d ? new Date(d + 'T00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric', weekday: 'short' }) : '未排日期';
+const twd = e => (+e.amount || 0) * (+e.rate || 1);
+const nt = n => 'NT$ ' + Math.round(n).toLocaleString();
+
+const views = {
+  itinerary() {
+    const rows = [...state.itinerary].sort((a, b) => (a.day || '9').localeCompare(b.day || '9') || (a.time || '').localeCompare(b.time || ''));
+    if (!rows.length) return `<div class="empty">還沒有行程，按右下角新增第一筆。</div>` + add('itinerary');
+    const days = [...new Set(rows.map(r => r.day || ''))];
+    return days.map(d => `<h2>${fmtDay(d)}</h2><ul class="rail">${rows.filter(r => (r.day || '') === d).map(r => `
+      <li data-edit="itinerary:${r.id}"><span class="time">${esc(r.time || '')}</span><strong>${esc(r.title)}</strong>
+      ${r.place ? `<div class="sub">${esc(r.place)}</div>` : ''}${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}</li>`).join('')}</ul>`).join('') + add('itinerary');
+  },
+  info() {
+    if (!state.info.length) return `<div class="empty">住宿、交通、緊急聯絡等資料放這裡。</div>` + add('info');
+    const cats = [...new Set(state.info.map(r => r.category || '其他'))];
+    return cats.map(c => `<h3>${esc(c)}</h3>${state.info.filter(r => (r.category || '其他') === c).map(r => `
+      <div class="row" data-edit="info:${r.id}" style="display:block"><strong>${esc(r.title)}</strong>${r.content ? `<p class="note">${esc(r.content)}</p>` : ''}</div>`).join('')}`).join('') + add('info');
+  },
+  members() {
+    return (state.members.length ? state.members.map(m => `<div class="row" data-edit="members:${m.id}"><strong>${esc(m.name)}</strong></div>`).join('')
+      : `<div class="empty">先新增旅伴，記帳分帳才能使用。</div>`) + add('members');
+  },
+  money() {
+    const ex = [...state.expenses].sort((a, b) => (b.day || '').localeCompare(a.day || ''));
+    if (!ex.length) return `<div class="empty">還沒有支出。${state.members.length ? '' : '請先到「成員」新增旅伴。'}</div>` + add('expenses');
+    const bal = {}; state.members.forEach(m => bal[m.id] = { paid: 0, share: 0 });
+    ex.forEach(e => {
+      const t = twd(e), ids = (e.split?.length ? e.split : state.members.map(m => m.id)).filter(i => bal[i]);
+      if (bal[e.payer]) bal[e.payer].paid += t;
+      ids.forEach(i => bal[i].share += t / ids.length);
+    });
+    const net = state.members.map(m => ({ id: m.id, v: bal[m.id].paid - bal[m.id].share }));
+    const cr = net.filter(x => x.v > 0.5).map(x => ({ ...x })).sort((a, b) => b.v - a.v);
+    const db = net.filter(x => x.v < -0.5).map(x => ({ id: x.id, v: -x.v })).sort((a, b) => b.v - a.v);
+    const pay = []; let i = 0, j = 0;
+    while (i < db.length && j < cr.length) {
+      const a = Math.min(db[i].v, cr[j].v); pay.push([db[i].id, cr[j].id, a]);
+      db[i].v -= a; cr[j].v -= a; if (db[i].v < 0.5) i++; if (cr[j].v < 0.5) j++;
+    }
+    return `<div class="sub">總支出（台幣）</div><div class="total">${nt(ex.reduce((s, e) => s + twd(e), 0))}</div>
+      <h3>每人結算</h3><table><tr><th></th><th>已付</th><th>應分攤</th><th>差額</th></tr>
+      ${state.members.map(m => { const b = bal[m.id], n = b.paid - b.share; return `<tr><td>${esc(m.name)}</td><td>${Math.round(b.paid).toLocaleString()}</td><td>${Math.round(b.share).toLocaleString()}</td><td class="${n >= 0 ? 'pos' : 'neg'}">${n >= 0 ? '+' : ''}${Math.round(n).toLocaleString()}</td></tr>`; }).join('')}</table>
+      <h3>建議還款</h3>${pay.length ? pay.map(p => `<div class="row"><span>${esc(mname(p[0]))} → ${esc(mname(p[1]))}</span><span class="amt">${nt(p[2])}</span></div>`).join('') : '<div class="sub">目前沒有需要還款的人。</div>'}
+      <h3>支出紀錄</h3>${ex.map(e => `<div class="row" data-edit="expenses:${e.id}"><div><strong>${esc(e.title)}</strong><div class="sub">${fmtDay(e.day)} · ${esc(mname(e.payer))} 付 · ${(e.split?.length || state.members.length)} 人分攤</div></div>
+        <div class="amt">${Number(e.amount).toLocaleString()} ${esc(e.currency)}${e.currency !== 'TWD' ? `<div class="sub">≈ ${nt(twd(e))}</div>` : ''}</div></div>`).join('')}` + add('expenses');
+  }
+};
+
+function render() {
+  $('#tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${v}</button>`).join('');
+  $('#view').innerHTML = views[tab]();
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-tab],[data-add],[data-edit]'); if (!el) return;
+  if (el.dataset.tab) { tab = el.dataset.tab; render(); scrollTo(0, 0); }
+  else if (el.dataset.add) openForm(el.dataset.add);
+  else { const [t, id] = el.dataset.edit.split(':'); openForm(t, id); }
+});
+$('#share').onclick = async () => {
+  const url = location.origin + location.pathname + '?trip=' + encodeURIComponent(TRIP);
+  try { await navigator.clipboard.writeText(url); toast('已複製分享連結'); } catch (e) { prompt('複製這個連結', url); }
+};
+addEventListener('online', loadAll);
+addEventListener('offline', () => { online = false; setSync(); });
+
+$('#ttl').textContent = CONFIG.TRIP_NAME;
+document.title = CONFIG.TRIP_NAME;
+setSync(); render(); loadAll(); subscribe();
+</script>
+</body>
+</html>

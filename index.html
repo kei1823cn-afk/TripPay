@@ -103,6 +103,14 @@ body{background-image:linear-gradient(180deg,var(--sky) 0,var(--bg) 360px);backg
 @keyframes isl{50%{transform:translateY(-6px)}}
 @keyframes seed{0%{transform:translate(0,0);opacity:0}15%{opacity:.9}100%{transform:translate(36px,-60px);opacity:0}}
 .empty:not(.small)::before{content:"";display:block;height:70px;margin-bottom:8px;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 64'><ellipse cx='40' cy='40' rx='26' ry='7' fill='%2374b36d'/><path d='M14 40Q20 52 30 58Q40 70 46 56Q56 50 66 40Z' fill='%238c7b66'/><rect x='44' y='28' width='3' height='12' fill='%236e5a43'/><circle cx='46' cy='27' r='9' fill='%233f8a58'/><ellipse cx='16' cy='14' rx='12' ry='5' fill='%23ffffff' fill-opacity='.9'/><ellipse cx='64' cy='10' rx='10' ry='4' fill='%23ffffff' fill-opacity='.9'/></svg>") center/contain no-repeat}
+.ct{cursor:pointer;display:flex;align-items:center;gap:6px}
+.ct i{font-style:normal;color:var(--sea);width:1em;text-align:center}
+.lpanel{margin:6px 0 10px;background:var(--card);border-radius:14px;padding:6px 14px 14px;box-shadow:0 1px 0 var(--line);color:var(--ink);cursor:default;font-size:1rem}
+.lpanel .btns{margin-top:10px}
+.datebox{margin:8px 0 0;background:var(--bg);border-radius:10px;padding:8px 10px}
+.datebox summary{cursor:pointer;color:var(--ink)}
+.datebox summary span{color:var(--sea);font-size:.85rem}
+.leglock .fab{display:none}
 /* trip cards */
 .trip{position:relative;display:flex;flex-direction:column;background:var(--card);border-radius:16px;overflow:hidden;margin:12px 0;cursor:pointer;box-shadow:0 2px 0 var(--line);transition:transform .15s}
 .trip .art{display:block;width:100%;height:76px}
@@ -150,10 +158,13 @@ const TRIP = new URLSearchParams(location.search).get('trip');   // 沒有 = 首
 const KEY = 'tw:data:' + TRIP;
 const CONFIGURED = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_KEY);
 const sb = (CONFIGURED && window.supabase) ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
-let online = false, tab = 'itinerary', selDay = null, saving = false, infoTab = 'restaurants';
+let online = false, tab = 'itinerary', selDay = null, saving = false, infoTab = 'restaurants', openLeg = null;
 let trips = JSON.parse(localStorage.getItem('tw:trips') || '[]');
 let state = { itinerary: [], flights: [], lodging: [], info: [], members: [], expenses: [], restaurants: [], check_cats: [], check_items: [], tw_files: [] };
 if (TRIP) try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+const FKEY = 'tw:fold:' + TRIP;
+const folded = new Set(JSON.parse(localStorage.getItem(FKEY) || '[]'));
+const foldSave = () => localStorage.setItem(FKEY, JSON.stringify([...folded]));
 const curTrip = () => trips.find(t => t.id === TRIP);
 const persist = () => { localStorage.setItem('tw:trips', JSON.stringify(trips)); if (TRIP) localStorage.setItem(KEY, JSON.stringify(state)); };
 const canEdit = () => !CONFIGURED || online;
@@ -250,6 +261,7 @@ function fieldHtml([k, type, label], v) {
 }
 function formHtml(t, row) {
   if (t === 'flights') return flightForm(row);
+  if (t === 'itinerary') return itineraryForm(row);
   if (t !== 'expenses') return FORMS[t].fields.map(f => fieldHtml(f, row[f[0]])).join('') + (t === 'restaurants' ? '<div class="sub" id="mapst"></div>' + catSelect(row.cat_id) : '') + (ATT.has(t) ? attHtml(cur.newId) : '');
   const ccy = row.currency || 'TWD', rate = row.rate ?? DEFAULT_RATES[ccy] ?? 1;
   const split = row.split?.length ? row.split : state.members.map(m => m.id);
@@ -276,6 +288,7 @@ function openForm(t, id, extra = {}) {
   if ($('#cur')) $('#cur').onchange = e => { $('#rate').value = DEFAULT_RATES[e.target.value] ?? 1; };
   wireForm(t);
   $('#dlg').showModal();
+  if (t === 'itinerary') document.activeElement?.blur();
 }
 $('#frm').onsubmit = async e => {
   e.preventDefault();
@@ -360,8 +373,8 @@ const fileChip = f => /^image\//.test(f.mime || '')
 const filesOf = (id, tbl) => state.tw_files.filter(f => f.owner_id === id && (!tbl || f.owner_table === tbl));
 const filesView = id => { const fs = filesOf(id); return fs.length ? `<div class="thumbs">${fs.map(fileChip).join('')}</div>` : ''; };
 const filesHtml = (id, tbl) => { const fs = filesOf(id, tbl); return fs.length ? `<div class="thumbs">${fs.map(f => `<span class="fwrap">${fileChip(f)}<button type="button" class="x" data-rmfile="${f.id}" aria-label="刪除附件">✕</button></span>`).join('')}</div>` : '<div class="sub">尚無附件</div>'; };
-const attHtml = (id, tbl) => `<label>附件（照片、PDF，單檔 10MB 內）</label><div id="flist">${filesHtml(id, tbl)}</div>` +
-  (sb ? `<input type="file" id="files" multiple accept="image/*,application/pdf" style="margin-top:8px">` : `<div class="sub">連線雲端後才能上傳附件</div>`);
+const attHtml = (id, tbl, p = '') => `<label>附件（照片、PDF，單檔 10MB 內）</label><div id="${p}flist">${filesHtml(id, tbl)}</div>` +
+  (sb ? `<input type="file" id="${p}files" multiple accept="image/*,application/pdf" style="margin-top:8px">` : `<div class="sub">連線雲端後才能上傳附件</div>`);
 function shrink(f) {
   return new Promise(res => {
     const img = new Image();
@@ -392,7 +405,7 @@ async function rmFile(id) {
   if (!f || !canEdit() || !confirm('刪除這個附件？')) return;
   if (sb) { await sb.storage.from('tw-files').remove([f.path]); await sb.from('tw_files').delete().eq('id', id); }
   state.tw_files = state.tw_files.filter(x => x.id !== id); persist();
-  if ($('#flist')) $('#flist').innerHTML = filesHtml(cur.newId, cur.variant === 'transport' ? 'transport' : undefined);
+  const tr = f.owner_table === 'transport', box = $(tr ? '#tflist' : '#flist'); if (box) box.innerHTML = filesHtml(f.owner_id, tr ? 'transport' : undefined);
   render();
 }
 function flightForm(row) {
@@ -465,7 +478,8 @@ const fmtMins = m => m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ' ' + (m 
 const dayRows = () => state.itinerary.filter(r => (r.day || '') === selDay).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 const placeOf = r => [r?.place || r?.title, curTrip()?.dest].filter(Boolean).join(' ');
 const gmapUrl = (mode, from, to) => `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=${GMODE[mode] || 'transit'}`;
-const legHtml = r => { const m = MODES[r.mode], n = filesOf(r.id, 'transport').length; return `<li class="leg ${m ? 'set' : ''}" data-trans="${r.id}"><span class="pill">${m ? m[0] + ' ' + m[1] + (r.mins ? ' · 約 ' + fmtMins(r.mins) : '') + (r.trans_note ? ' 📝' : '') + (n ? ' 📎' + n : '') : '＋ 交通方式'}</span></li>`; };
+const legHtml = r => { const m = MODES[r.mode], n = filesOf(r.id, 'transport').length, open = openLeg === r.id;
+  return `<li class="leg ${m ? 'set' : ''}"><span class="pill" data-trans="${r.id}">${m ? m[0] + ' ' + m[1] + (r.mins ? ' · 約 ' + fmtMins(r.mins) : '') : '＋ 交通方式'}${r.trans_note ? ' 📝' : ''}${n ? ' 📎' + n : ''}</span>${open ? legPanel(r) : ''}</li>`; };
 let geoNet = false;
 async function geocode(q) {
   const k = 'tw:geo:' + q, c = localStorage.getItem(k); if (c) return JSON.parse(c);
@@ -487,46 +501,48 @@ async function estimate(mode, from, to) {
     return { mins: Math.max(5, Math.ceil((km * sp[1] / sp[0] * 60 + sp[2]) / 5) * 5), km };
   } catch (e) { return { error: '目前無法估算（需要網路），請手動輸入時間' }; }
 }
-function transportForm(row, prev) {
-  const opts = Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === (row.mode || 'car') ? 'selected' : ''}>${v[0]} ${v[1]}</option>`).join('');
-  return `<div class="sub">${esc(prev?.place || prev?.title || '')} → ${esc(row.place || row.title)}</div>
-    <label>交通方式</label><select name="mode" id="tmode"><option value="">（不設定，移除交通）</option>${opts}</select>
-    <label>預估時間（分鐘）</label><input name="mins" id="tmins" type="number" min="0" step="1" value="${esc(row.mins ?? '')}">
-    <div class="btns"><button type="button" id="est">自動估算</button></div>
-    <div class="sub" id="eststat">自動估算是依兩地直線距離粗估，實際時間請以 Google 地圖為準。</div>
-    <p><a id="gmap" target="_blank" rel="noopener">在 Google 地圖查詳細路線 ↗</a></p>
-    <label>備註（班次、車資、停車場…）</label><textarea name="trans_note">${esc(row.trans_note)}</textarea>
-    ${attHtml(row.id, 'transport')}`;
+function legPanel(r) {
+  const rows = dayRows(), prev = rows[rows.findIndex(x => x.id === r.id) - 1];
+  const opts = Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === r.mode ? 'selected' : ''}>${v[0]} ${v[1]}</option>`).join('');
+  return `<div class="lpanel" data-lp="${r.id}"><div class="sub">${esc(prev?.place || prev?.title || '')} → ${esc(r.place || r.title)}</div>
+    <label>交通方式</label><select name="mode"><option value="">（不設定，移除交通）</option>${opts}</select>
+    <label>預估時間（分鐘）</label><input name="mins" type="number" min="0" step="1" value="${esc(r.mins ?? '')}">
+    <div class="btns"><button type="button" data-test="${r.id}">自動估算</button></div>
+    <div class="sub" data-eststat>自動估算是依兩地直線距離粗估，實際時間請以 Google 地圖為準。</div>
+    <p><a data-gmap target="_blank" rel="noopener" href="${gmapUrl(r.mode, placeOf(prev), placeOf(r))}">在 Google 地圖查詳細路線 ↗</a></p>
+    <label>備註（班次、車資、停車場…）</label><textarea name="trans_note">${esc(r.trans_note)}</textarea>
+    ${attHtml(r.id, 'transport', 't')}
+    <div class="btns"><button type="button" data-tcancel>取消</button><button type="button" class="go" data-tsave="${r.id}">儲存</button></div></div>`;
 }
-const transTap = id => { const r = state.itinerary.find(x => x.id === id); if (r?.mode) openTransport(id); else quickTransport(id); };
-async function quickTransport(id) {            // 第一次點選：直接設為開車，不跳出選單
-  if (!canEdit()) return toast('離線中，目前只能查看');
-  const rows = dayRows(), i = rows.findIndex(r => r.id === id); if (i < 1) return;
-  const prev = rows[i - 1], row = { ...rows[i], mode: 'car' };
-  saveRow('itinerary', row);
-  const est = await estimate('car', placeOf(prev), placeOf(row));
-  const now = state.itinerary.find(r => r.id === id);
-  if (est.mins && now && now.mode === 'car' && !now.mins) saveRow('itinerary', { ...now, mins: est.mins });
+function toggleLeg(id) {
+  if (openLeg !== id && !canEdit()) return toast('離線中，目前只能查看');
+  openLeg = openLeg === id ? null : id; render();
+  $('.lpanel')?.scrollIntoView({ block: 'nearest' });
 }
-function openTransport(id) {
-  if (!canEdit()) return toast('離線中，目前只能查看');
-  const rows = dayRows(), i = rows.findIndex(r => r.id === id); if (i < 1) return;
-  const row = rows[i], prev = rows[i - 1];
-  cur = { t: 'itinerary', id, variant: 'transport', prev, extra: {}, newId: id };
-  $('#frm').innerHTML = `<h3 style="margin:0;font-family:var(--serif);font-size:1.1rem;color:var(--ink)">交通方式</h3>${transportForm(row, prev)}
-    <div class="btns"><button type="button" id="cancel">取消</button><button class="go">儲存</button></div>`;
-  $('#cancel').onclick = () => $('#dlg').close();
-  const from = placeOf(prev), to = placeOf(row), upd = () => { $('#gmap').href = gmapUrl($('#tmode').value, from, to); };
-  $('#tmode').onchange = upd; upd();
-  $('#est').onclick = async () => {
-    const m = $('#tmode').value; if (!m) return toast('請先選交通方式');
-    $('#eststat').textContent = '估算中…';
-    const r = await estimate(m, from, to);
-    if (r.mins) { $('#tmins').value = r.mins; $('#eststat').textContent = `粗估約 ${fmtMins(r.mins)}（直線 ${r.km.toFixed(1)} 公里），實際請以 Google 地圖為準`; }
-    else $('#eststat').textContent = r.error;
-  };
-  $('#dlg').showModal();
+async function estLeg() {
+  const pn = $('.lpanel'); if (!pn) return;
+  const r = state.itinerary.find(x => x.id === pn.dataset.lp), mode = pn.querySelector('[name=mode]').value;
+  if (!mode) return toast('請先選交通方式');
+  const rows = dayRows(), prev = rows[rows.findIndex(x => x.id === r.id) - 1], st = pn.querySelector('[data-eststat]');
+  st.textContent = '估算中…';
+  const e = await estimate(mode, placeOf(prev), placeOf(r));
+  if (e.mins) { pn.querySelector('[name=mins]').value = e.mins; st.textContent = `粗估約 ${fmtMins(e.mins)}（直線 ${e.km.toFixed(1)} 公里），實際請以 Google 地圖為準`; } else st.textContent = e.error;
 }
+async function saveLeg(id) {
+  const pn = $('.lpanel'), r = state.itinerary.find(x => x.id === id); if (!pn || !r || saving) return;
+  saving = true;
+  try {
+    const mode = pn.querySelector('[name=mode]').value || null, m0 = pn.querySelector('[name=mins]').value;
+    const row = { ...r, mode, mins: mode && m0 ? Math.round(+m0) : null, trans_note: pn.querySelector('[name=trans_note]').value.trim() || null };
+    const files = [...(pn.querySelector('#tfiles')?.files || [])];
+    if (mode && !row.mins) { const rows = dayRows(), prev = rows[rows.findIndex(x => x.id === id) - 1], e = await estimate(mode, placeOf(prev), placeOf(row)); if (e.mins) row.mins = e.mins; }
+    openLeg = null;
+    await saveRow('itinerary', row);
+    if (files.length) { toast('附件上傳中…'); await uploadFiles('transport', id, files); await loadAll(); toast('附件已上傳'); }
+  } finally { saving = false; }
+}
+const itineraryForm = row => `<details class="datebox"><summary>日期：${row.day ? fmtDay(row.day) : '未排日期'}　<span>更改</span></summary><label>日期</label><input name="day" type="date" value="${esc(row.day || '')}"></details>` +
+  FORMS.itinerary.fields.filter(f => f[0] !== 'day').map(f => fieldHtml(f, row[f[0]])).join('');
 const catSelect = cid => `<label>類別</label><select name="cat_id"><option value="">未分類</option>${state.check_cats.filter(c => c.kind === 'restaurants').map(c => `<option value="${c.id}" ${c.id === cid ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>`;
 
 const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -589,30 +605,38 @@ const views = {
     const card = r => `<div class="row blk" data-edit="restaurants:${r.id}"><strong>${esc(r.name)}</strong>${/^https?:\/\//.test(r.map_url || '') ? ` <a href="${esc(r.map_url)}" target="_blank" rel="noopener">📍 地圖</a>` : ''}
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}${filesView(r.id)}</div>`;
     const loose = rs.filter(r => !cats.some(c => c.id === r.cat_id));
-    let h = `<div class="catbar">${cats.length ? '' : '<button class="mini" data-preset="restaurants">加入建議類別</button>'}<button class="mini" data-add="check_cats">＋ 新增類別</button></div>`;
+    const ids = cats.map(c => c.id).concat(cats.length && loose.length ? ['loose'] : []), anyOpen = ids.some(i => !folded.has(i));
+    let h = `<div class="catbar">${cats.length ? `<button class="mini" data-foldall="${ids.join(',')}">${anyOpen ? '全部收合' : '全部展開'}</button>` : '<button class="mini" data-preset="restaurants">加入建議類別</button>'}<button class="mini" data-add="check_cats">＋ 新增類別</button></div>`;
     if (!rs.length && !cats.length) h += `<div class="empty">還沒有餐廳，貼上 Google 地圖連結就能新增。</div>`;
     h += cats.map(c => {
-      const its = rs.filter(r => r.cat_id === c.id);
-      return `<h3 class="cat"><span>${esc(c.name)} <small>${its.length}</small></span><span><button class="mini" data-add="restaurants" data-cat="${c.id}">＋ 餐廳</button> <button class="mini" data-edit="check_cats:${c.id}">✎</button></span></h3>` +
-        (its.map(card).join('') || `<div class="empty small">這個類別還沒有餐廳</div>`);
+      const its = rs.filter(r => r.cat_id === c.id), open = !folded.has(c.id);
+      return `<h3 class="cat"><span class="ct" data-fold="${c.id}"><i>${open ? '▾' : '▸'}</i>${esc(c.name)} <small>${its.length}</small></span><span><button class="mini" data-add="restaurants" data-cat="${c.id}">＋ 餐廳</button> <button class="mini" data-edit="check_cats:${c.id}">✎</button></span></h3>` +
+        (open ? (its.map(card).join('') || `<div class="empty small">這個類別還沒有餐廳</div>`) : '');
     }).join('');
-    if (loose.length) h += (cats.length ? '<h3 class="cat"><span>未分類</span></h3>' : '') + loose.map(card).join('');
+    if (loose.length) {
+      const open = !folded.has('loose');
+      h += (cats.length ? `<h3 class="cat"><span class="ct" data-fold="loose"><i>${open ? '▾' : '▸'}</i>未分類 <small>${loose.length}</small></span></h3>` : '') + (open || !cats.length ? loose.map(card).join('') : '');
+    }
     return h + add('restaurants');
   },
   checklist(kind) {
     const cats = state.check_cats.filter(c => c.kind === kind), items = state.check_items.filter(i => i.kind === kind);
     if (!cats.length) return `<div class="empty">還沒有類別，先新增一個類別再加項目。</div><div style="text-align:center"><button class="mini" data-preset="${kind}">加入建議類別</button></div>` + add('check_cats');
-    return `<div class="meta">已完成 ${items.filter(i => i.done).length} / ${items.length}</div>` + cats.map(c => {
-      const its = items.filter(i => i.cat_id === c.id);
-      return `<h3 class="cat"><span>${esc(c.name)} <small>${its.filter(i => i.done).length}/${its.length}</small></span><span><button class="mini" data-add="check_items" data-cat="${c.id}">＋ 項目</button> <button class="mini" data-edit="check_cats:${c.id}">✎</button></span></h3>` +
-        its.map(i => `<div class="row item ${i.done ? 'done' : ''}"><input type="checkbox" class="cb" data-toggle="${i.id}" ${i.done ? 'checked' : ''} aria-label="完成"><div class="tt" data-edit="check_items:${i.id}"><strong>${esc(i.title)}</strong>${i.note ? `<div class="note">${esc(i.note)}</div>` : ''}${filesView(i.id)}</div></div>`).join('');
+    const ids = cats.map(c => c.id), anyOpen = ids.some(i => !folded.has(i));
+    return `<div class="meta">已完成 ${items.filter(i => i.done).length} / ${items.length}<button class="mini" style="float:right" data-foldall="${ids.join(',')}">${anyOpen ? '全部收合' : '全部展開'}</button></div>` + cats.map(c => {
+      const its = items.filter(i => i.cat_id === c.id), open = !folded.has(c.id);
+      return `<h3 class="cat"><span class="ct" data-fold="${c.id}"><i>${open ? '▾' : '▸'}</i>${esc(c.name)} <small>${its.filter(i => i.done).length}/${its.length}</small></span><span><button class="mini" data-add="check_items" data-cat="${c.id}">＋ 項目</button> <button class="mini" data-edit="check_cats:${c.id}">✎</button></span></h3>` +
+        (open ? its.map(i => `<div class="row item ${i.done ? 'done' : ''}"><input type="checkbox" class="cb" data-toggle="${i.id}" ${i.done ? 'checked' : ''} aria-label="完成"><div class="tt" data-edit="check_items:${i.id}"><strong>${esc(i.title)}</strong>${i.note ? `<div class="note">${esc(i.note)}</div>` : ''}${filesView(i.id)}</div></div>`).join('') : '');
     }).join('') + add('check_cats');
   },
   notes() {
     if (!state.info.length) return `<div class="empty">其他想記下來的資料放這裡。</div>` + add('info');
     const cats = [...new Set(state.info.map(r => r.category || '其他'))];
-    return cats.map(c => `<h3>${esc(c)}</h3>${state.info.filter(r => (r.category || '其他') === c).map(r => `
-      <div class="row blk" data-edit="info:${r.id}"><strong>${esc(r.title)}</strong>${r.content ? `<p class="note">${esc(r.content)}</p>` : ''}</div>`).join('')}`).join('') + add('info');
+    return cats.map(c => {
+      const its = state.info.filter(r => (r.category || '其他') === c), k = 'n:' + c, open = !folded.has(k);
+      return `<h3 class="cat"><span class="ct" data-fold="${esc(k)}"><i>${open ? '▾' : '▸'}</i>${esc(c)} <small>${its.length}</small></span></h3>` +
+        (open ? its.map(r => `<div class="row blk" data-edit="info:${r.id}"><strong>${esc(r.title)}</strong>${r.content ? `<p class="note">${esc(r.content)}</p>` : ''}</div>`).join('') : '');
+    }).join('') + add('info');
   },
   members() {
     return (state.members.length ? state.members.map(m => `<div class="row" data-edit="members:${m.id}"><strong>${esc(m.name)}</strong></div>`).join('')
@@ -654,21 +678,26 @@ function render() {
   $('#tabs').innerHTML = TRIP ? Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${v}</button>`).join('') : '';
   const head = TRIP ? `<div class="hero">${scene('small')}</div>${t ? `<div class="meta">${esc(t.dest || '')} ${range(t)} ${countdown(t) ? '· ' + countdown(t) : ''}</div>` : ''}` : '';
   const v = $('#view');
-  v.className = fresh ? 'in' : '';
+  v.className = (fresh ? 'in' : '') + (openLeg ? ' leglock' : '');
   v.innerHTML = head + (TRIP ? views[tab]() : views.home());
   fresh = false;
   $('.dchip.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-test],[data-fold],[data-foldall]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
-  else if ('day' in el.dataset) { selDay = el.dataset.day; render(); }
+  else if ('day' in el.dataset) { selDay = el.dataset.day; openLeg = null; render(); }
   else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
   else if (el.dataset.preset) addPreset(el.dataset.preset);
   else if (el.dataset.rmfile) rmFile(el.dataset.rmfile);
-  else if (el.dataset.trans) transTap(el.dataset.trans);
-  else if (el.dataset.tab) { tab = el.dataset.tab; fresh = true; render(); scrollTo(0, 0); }
+  else if (el.dataset.trans) toggleLeg(el.dataset.trans);
+  else if ('tsave' in el.dataset) saveLeg(el.dataset.tsave);
+  else if ('tcancel' in el.dataset) { openLeg = null; render(); }
+  else if ('test' in el.dataset) estLeg();
+  else if (el.dataset.fold) { const k = el.dataset.fold; folded.has(k) ? folded.delete(k) : folded.add(k); foldSave(); render(); }
+  else if (el.dataset.foldall) { const ids = el.dataset.foldall.split(','), anyOpen = ids.some(i => !folded.has(i)); ids.forEach(i => anyOpen ? folded.add(i) : folded.delete(i)); foldSave(); render(); }
+  else if (el.dataset.tab) { tab = el.dataset.tab; openLeg = null; fresh = true; render(); scrollTo(0, 0); }
   else if (el.dataset.add) {
     const ex = {}; if (el.dataset.cat) ex.cat_id = el.dataset.cat; if (el.dataset.leg) ex.leg = el.dataset.leg;
     if (el.dataset.add === 'check_items' || el.dataset.add === 'check_cats') ex.kind = infoTab;
@@ -677,6 +706,11 @@ document.addEventListener('click', e => {
   else { const [t, id] = el.dataset.edit.split(':'); openForm(t, id); }
 });
 document.addEventListener('change', e => {
+  const sel = e.target.closest('.lpanel [name=mode]');
+  if (sel) {
+    const pn = sel.closest('.lpanel'), r = state.itinerary.find(x => x.id === pn.dataset.lp), rows = dayRows();
+    pn.querySelector('[data-gmap]').href = gmapUrl(sel.value, placeOf(rows[rows.findIndex(x => x.id === r.id) - 1]), placeOf(r)); return;
+  }
   const el = e.target.closest('[data-toggle]'); if (!el) return;
   const r = state.check_items.find(x => x.id === el.dataset.toggle); if (!r) return;
   if (!canEdit()) { el.checked = !el.checked; return toast('離線中，目前只能查看'); }

@@ -68,6 +68,13 @@ th:first-child,td:first-child{text-align:left}
 th{font-size:.85rem;color:var(--mute);font-weight:600}
 .pos{color:var(--leaf)}.neg{color:var(--bad)}
 .total{font:800 2.1rem var(--serif);margin:6px 0 0}
+.days{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:4px 16px 8px;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.dchip{flex:0 0 auto;min-width:62px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:14px;padding:6px 10px;font:inherit;line-height:1.25;text-align:center}
+.dchip b{display:block;font:700 .78rem var(--serif);color:var(--mute)}
+.dchip span{font-weight:700}
+.dchip.on{background:var(--sun);border-color:var(--sun);color:#2b4a47}
+.dchip.on b{color:#2b4a47}
 /* trip cards */
 .trip{position:relative;display:flex;flex-direction:column;background:var(--card);border-radius:16px;overflow:hidden;margin:12px 0;cursor:pointer;box-shadow:0 2px 0 var(--line);transition:transform .15s}
 .trip .art{display:block;width:100%;height:76px}
@@ -115,7 +122,7 @@ const TRIP = new URLSearchParams(location.search).get('trip');   // 沒有 = 首
 const KEY = 'tw:data:' + TRIP;
 const CONFIGURED = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_KEY);
 const sb = (CONFIGURED && window.supabase) ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
-let online = false, tab = 'itinerary';
+let online = false, tab = 'itinerary', selDay = null, saving = false;
 let trips = JSON.parse(localStorage.getItem('tw:trips') || '[]');
 let state = { itinerary: [], flights: [], lodging: [], info: [], members: [], expenses: [] };
 if (TRIP) try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
@@ -147,14 +154,14 @@ async function loadAll() {
   persist(); setSync(); render();
 }
 async function saveRow(t, row) {
+  const arr = t === 'tw_trips' ? trips : state[t], i = arr.findIndex(r => r.id === row.id);
+  if (i >= 0) arr[i] = row; else arr.push(row);      // 先更新畫面，同 id 不會重複新增
+  persist(); render();
   if (sb) {
     const { error } = await sb.from(t).upsert(t === 'tw_trips' ? row : { ...row, trip_id: TRIP });
-    if (error) return toast('儲存失敗：' + error.message);
+    if (error) toast('儲存失敗：' + error.message);
     return loadAll();
   }
-  const arr = t === 'tw_trips' ? trips : state[t], i = arr.findIndex(r => r.id === row.id);
-  if (i >= 0) arr[i] = row; else arr.push(row);
-  persist(); render();
 }
 async function delRow(t, id) {
   if (sb) {
@@ -211,8 +218,8 @@ let cur = null;
 function openForm(t, id) {
   if (!canEdit()) return toast('離線中，目前只能查看');
   if (t === 'expenses' && !state.members.length) return toast('請先到「成員」新增成員');
-  const row = id ? (t === 'tw_trips' ? trips : state[t]).find(r => r.id === id) : (t === 'itinerary' ? { day: curTrip()?.start_day } : {});
-  cur = { t, id };
+  const row = id ? (t === 'tw_trips' ? trips : state[t]).find(r => r.id === id) : (t === 'itinerary' ? { day: selDay || curTrip()?.start_day } : {});
+  cur = { t, id, newId: id || (t === 'tw_trips' ? shortId() : crypto.randomUUID()) };
   $('#frm').innerHTML = `<h3 style="margin:0;font-family:var(--serif);font-size:1.1rem;color:var(--ink)">${id ? '編輯' : '新增'}${FORMS[t].title}</h3>${formHtml(t, row)}
     <div class="btns">${id ? '<button type="button" class="del" id="del">刪除</button>' : ''}<button type="button" id="cancel">取消</button><button class="go">儲存</button></div>`;
   $('#cancel').onclick = () => $('#dlg').close();
@@ -222,12 +229,15 @@ function openForm(t, id) {
 }
 $('#frm').onsubmit = async e => {
   e.preventDefault();
+  if (saving) return;
   const fd = new FormData(e.target), row = {};
   for (const [k, v] of fd.entries()) if (k !== 'split') row[k] = v === '' ? null : v;
+  if (cur.t === 'tw_trips' && row.start_day && row.end_day && row.end_day < row.start_day) return toast('回程日不能早於出發日');
   if (cur.t === 'expenses') { row.split = fd.getAll('split'); row.amount = +row.amount; row.rate = +row.rate || 1; }
-  row.id = cur.id || (cur.t === 'tw_trips' ? shortId() : crypto.randomUUID());
-  await saveRow(cur.t, row);
+  row.id = cur.newId;                                  // 同一張表單永遠同一個 id
+  saving = true; e.submitter && (e.submitter.disabled = true);
   $('#dlg').close();
+  try { await saveRow(cur.t, row); } finally { saving = false; }
 };
 
 /* ===== 插圖 ===== */
@@ -260,6 +270,17 @@ const countdown = t => {
 };
 const link = u => /^https?:\/\//.test(u || '') ? `<a href="${esc(u)}" target="_blank" rel="noopener">連結</a>` : '';
 
+const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+function tripDays() {          // 旅程出發日～回程日自動展開，再加上行程裡出現過的日期
+  const t = curTrip(), set = new Set(state.itinerary.map(r => r.day).filter(Boolean));
+  if (t?.start_day) {
+    const end = t.end_day && t.end_day >= t.start_day ? t.end_day : t.start_day;
+    const d = new Date(t.start_day + 'T00:00'), e = new Date(end + 'T00:00');
+    for (let i = 0; i < 60 && d <= e; i++) { set.add(ymd(d)); d.setDate(d.getDate() + 1); }
+  }
+  return [...set].sort();
+}
+
 const views = {
   home() {
     const rows = [...trips].sort((a, b) => (a.start_day || '9').localeCompare(b.start_day || '9'));
@@ -269,11 +290,19 @@ const views = {
         : `<div class="empty">還沒有旅程，按右下角出發吧。</div>`) + add('tw_trips');
   },
   itinerary() {
-    const rows = [...state.itinerary].sort((a, b) => (a.day || '9').localeCompare(b.day || '9') || (a.time || '').localeCompare(b.time || ''));
-    if (!rows.length) return `<div class="empty">還沒有行程，按右下角新增第一筆。</div>` + add('itinerary');
-    return [...new Set(rows.map(r => r.day || ''))].map(d => `<h2>${fmtDay(d)}</h2><ul class="rail">${rows.filter(r => (r.day || '') === d).map(r => `
+    const days = tripDays(), undated = state.itinerary.some(r => !r.day);
+    const tabs = undated ? [...days, ''] : days;
+    if (!tabs.length) return `<div class="empty">先到首頁編輯這趟旅程，設定出發日與回程日，行程日期就會自動建立。</div>` + add('itinerary');
+    if (!tabs.includes(selDay)) { const today = ymd(new Date()); selDay = tabs.includes(today) ? today : tabs[0]; }
+    const t0 = curTrip()?.start_day;
+    const chips = tabs.map(d => {
+      const n = d && t0 ? Math.round((new Date(d + 'T00:00') - new Date(t0 + 'T00:00')) / 864e5) + 1 : 0;
+      return `<button class="dchip ${d === selDay ? 'on' : ''}" data-day="${d}"><b>${d ? (n >= 1 ? 'D' + n : '其他') : '未排'}</b><span>${d ? d.slice(5).replace('-', '/') : '日期'}</span></button>`;
+    }).join('');
+    const rows = state.itinerary.filter(r => (r.day || '') === selDay).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    return `<div class="days">${chips}</div><h2>${fmtDay(selDay)}</h2>` + (rows.length ? `<ul class="rail">${rows.map(r => `
       <li data-edit="itinerary:${r.id}"><span class="time">${esc(r.time || '')}</span><strong>${esc(r.title)}</strong>
-      ${r.place ? `<div class="sub">${esc(r.place)}</div>` : ''}${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}</li>`).join('')}</ul>`).join('') + add('itinerary');
+      ${r.place ? `<div class="sub">${esc(r.place)}</div>` : ''}${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}</li>`).join('')}</ul>` : `<div class="empty small">這天還沒有安排，按右下角新增。</div>`) + add('itinerary');
   },
   trip() {
     const fl = [...state.flights].sort((a, b) => (a.dep_time || '').localeCompare(b.dep_time || ''));
@@ -337,11 +366,13 @@ function render() {
   v.className = fresh ? 'in' : '';
   v.innerHTML = head + (TRIP ? views[tab]() : views.home());
   fresh = false;
+  $('.dchip.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
+  else if ('day' in el.dataset) { selDay = el.dataset.day; render(); }
   else if (el.dataset.tab) { tab = el.dataset.tab; fresh = true; render(); scrollTo(0, 0); }
   else if (el.dataset.add) openForm(el.dataset.add);
   else { const [t, id] = el.dataset.edit.split(':'); openForm(t, id); }

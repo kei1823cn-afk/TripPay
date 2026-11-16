@@ -142,6 +142,21 @@ body{background-image:linear-gradient(180deg,var(--sky) 0,var(--bg) 360px);backg
 .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--leaf),var(--sun));border-radius:99px}
 .tag{font-size:.75rem;background:var(--bg);border-radius:999px;padding:1px 8px;color:var(--sea)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tl{list-style:none;margin:0;padding:0}
+.tl li.it,.tl li.leg,.tl li.gap{display:grid;grid-template-columns:52px 14px minmax(0,1fr);column-gap:8px}
+.tl .tm{text-align:right;font-weight:700;color:var(--sea);padding-top:16px;line-height:1.1;font-size:.95rem}
+.tl .tm small{display:block;font-weight:400;color:var(--mute);font-size:.78rem;margin-top:3px}
+.tl .ln{position:relative}
+.tl .ln::before{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:2px dashed var(--leaf)}
+.tl .ln i{position:absolute;left:50%;top:21px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--sun);border:2px solid var(--bg);z-index:1}
+.tl .anc .ln i{background:var(--leaf)}
+.tl .card{background:var(--card);border-radius:14px;padding:10px 12px;margin:6px 0;box-shadow:0 1px 0 var(--line),0 6px 16px rgba(58,134,184,.09);cursor:pointer;transition:transform .15s}
+.tl .card:active{transform:scale(.98)}
+.tl .card.dim{opacity:.75;border:1px dashed var(--line);box-shadow:none}
+.tl .dur{margin-left:8px;font-size:.78rem;color:var(--sea);background:var(--bg);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.tl li.leg{font-size:.85rem;color:var(--mute)}
+.tl .lc{padding:2px 0;min-width:0}
+.warn{color:var(--bad);font-size:.8rem;margin:3px 0 0 4px}
 /* trip cards */
 .trip{position:relative;display:flex;flex-direction:column;background:var(--card);border-radius:16px;overflow:hidden;margin:12px 0;cursor:pointer;box-shadow:0 2px 0 var(--line);transition:transform .15s}
 .trip .art{display:block;width:100%;height:76px}
@@ -288,8 +303,8 @@ async function subscribe() {
 
 /* ===== 表單 ===== */
 const FORMS = {
-  tw_trips:  { title: '旅程', fields: [['name','text','旅程名稱（例如：東京五日）'],['start_day','date','出發日'],['end_day','date','回程日']] },
-  itinerary: { title: '行程', fields: [['day','date','日期'],['time','time','時間'],['title','text','活動'],['place','text','地點'],['note','textarea','備註']] },
+  tw_trips:  { title: '旅程', fields: [['name','text','旅程名稱（例如：東京五日）'],['start_day','date','出發日'],['end_day','date','回程日'],['home_address','text','家裡地址（選填，當作行程的起點與終點）']] },
+  itinerary: { title: '行程', fields: [['day','date','日期'],['time','time','開始時間'],['end_time','time','結束時間'],['duration','number','活動總時間（分鐘）'],['title','text','活動'],['place','text','地點'],['note','textarea','備註']] },
   flights:   { title: '航班', fields: [['dep_airport','text','出發機場'],['arr_airport','text','抵達機場'],['dep_time','datetime-local','起飛時間（當地）'],['arr_time','datetime-local','抵達時間（當地）'],['booking_ref','text','訂位代號'],['note','textarea','備註（行李、座位…）']] },
   lodging:   { title: '住宿', fields: [['name','text','住宿名稱'],['address','text','地址'],['check_in','date','入住日'],['check_out','date','退房日'],['booking_ref','text','訂房編號'],['url','url','訂房或地圖連結'],['note','textarea','備註（入住時間、設備…）']] },
   info:      { title: '資訊', fields: [['category','text','分類（可自行輸入）'],['title','text','標題'],['content','textarea','內容']] },
@@ -350,6 +365,13 @@ $('#frm').onsubmit = async e => {
   const row = { ...(existing || {}), ...vals, ...(existing ? {} : cur.extra || {}) };
   if (cur.t === 'tw_trips' && row.start_day && row.end_day && row.end_day < row.start_day) return toast('回程日不能早於出發日');
   if (cur.t === 'expenses') { row.payers = fd.getAll('payers'); if (!row.payers.length) return toast('請至少選擇一位付款人'); row.payer = row.payers[0]; row.split = fd.getAll('split'); row.amount = +row.amount; row.rate = +row.rate || 1; }
+  if (cur.t === 'itinerary') {
+    const s0 = toMin(row.time), e0 = toMin(row.end_time); let d0 = row.duration == null || row.duration === '' ? null : Math.round(+row.duration);
+    if (s0 != null && e0 != null) { if (e0 < s0) return toast('結束時間不能早於開始時間'); d0 = e0 - s0; }
+    else if (s0 != null && d0 != null) row.end_time = fromMin(Math.min(s0 + d0, 1439));
+    else if (e0 != null && d0 != null) row.time = fromMin(Math.max(e0 - d0, 0));
+    row.duration = d0;
+  }
   row.id = cur.newId;                                  // 同一張表單永遠同一個 id
   saving = true; if (e.submitter) e.submitter.disabled = true;
   try {
@@ -496,6 +518,17 @@ async function resolveMap(u) {
   } catch (e) { return null; }
 }
 function wireForm(t) {
+  if (t === 'itinerary') {
+    const S = $('[name=time]'), E = $('[name=end_time]'), D = $('[name=duration]'); let ed = [];
+    const upd = f => {
+      ed = [f, ...ed.filter(x => x !== f)].slice(0, 2); if (ed.length < 2) return;
+      const third = ['s', 'e', 'd'].find(x => !ed.includes(x)), s0 = toMin(S.value), e0 = toMin(E.value), d0 = D.value === '' ? null : +D.value;
+      if (third === 'd' && s0 != null && e0 != null) D.value = e0 >= s0 ? e0 - s0 : '';
+      if (third === 'e' && s0 != null && d0 != null) E.value = fromMin(Math.min(s0 + d0, 1439));
+      if (third === 's' && e0 != null && d0 != null) S.value = fromMin(Math.max(e0 - d0, 0));
+    };
+    [[S, 's'], [E, 'e'], [D, 'd']].forEach(([el, k]) => { el.addEventListener('input', () => upd(k)); el.addEventListener('change', () => upd(k)); });
+  }
   if (t === 'restaurants') {
     const u = $('[name=map_url]'), n = $('[name=name]');
     const go = async () => {
@@ -532,12 +565,46 @@ const MODES = { walk: ['🚶', '步行'], transit: ['🚇', '電車地鐵'], bus
 const SPEED = { walk: [4.8, 1.25, 0], bike: [14, 1.3, 0], transit: [22, 1.3, 8], bus: [15, 1.3, 6], taxi: [28, 1.3, 3], car: [28, 1.3, 3], ferry: [20, 1.1, 10] };   // [km/h, 繞路係數, 等候分鐘]
 const GMODE = { walk: 'walking', bike: 'bicycling', taxi: 'driving', car: 'driving' };
 const fmtMins = m => m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ' ' + (m % 60) + ' 分' : ''}` : `${m} 分`;
-const dayRows = () => state.itinerary.filter(r => (r.day || '') === selDay).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+const toMin = v => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? +m[1] * 60 + +m[2] : null; };
+const fromMin = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
+const shiftDay = (d, n) => { const x = new Date(d + 'T00:00'); x.setDate(x.getDate() + n); return ymd(x); };
+const dayRows = () => state.itinerary.filter(r => (r.day || '') === selDay).sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+const endMin = r => toMin(r?.end_time) ?? (toMin(r?.time) != null && r?.duration ? toMin(r.time) + r.duration : null);
+const hotelFor = night => state.lodging.find(l => l.check_in && l.check_out && l.check_in <= night && night < l.check_out);
+const tripEnds = () => { const t = curTrip(), ds = tripDays(); return [t?.start_day || ds[0], t?.end_day || t?.start_day || ds[ds.length - 1]]; };
+function startAnchor(day) {                   // 每天第一個行程：第一天從家裡出發，其餘從前一晚的住宿出發
+  if (!day) return null;
+  if (day === tripEnds()[0]) { const a = curTrip()?.home_address || ''; return { icon: '🏠', name: '家裡', sub: a, place: a, tm: '出發', home: true }; }
+  const h = hotelFor(shiftDay(day, -1));
+  return h ? { icon: '🏨', name: h.name, sub: h.address || '', place: h.address || h.name, tm: '' } : { icon: '🏨', name: '飯店', sub: '尚未設定住宿', place: '', tm: '', none: true };
+}
+function endAnchor(day) {                     // 每天最後一個行程：最後一天回到家裡，其餘回到當晚的住宿
+  if (!day) return null;
+  if (day === tripEnds()[1]) { const a = curTrip()?.home_address || ''; return { icon: '🏠', name: '家裡', sub: a, place: a, tm: '返回', home: true }; }
+  const h = hotelFor(day);
+  return h ? { icon: '🏨', name: h.name, sub: h.address || '', place: h.address || h.name, tm: '' } : { icon: '🏨', name: '飯店', sub: '尚未設定住宿', place: '', tm: '', none: true };
+}
+function prevOf(id) {
+  const rows = dayRows(), i = rows.findIndex(x => x.id === id);
+  if (i > 0) return rows[i - 1];
+  const a = startAnchor(selDay); return a?.place ? { title: a.name, place: a.place } : null;
+}
+const ancHtml = a => `<li class="it anc"><div class="tm">${esc(a.tm || '')}</div><span class="ln"><i></i></span><div class="card ${a.none ? 'dim' : ''}" ${a.home ? `data-edit="tw_trips:${esc(TRIP)}"` : 'data-tab="trip"'}><strong>${a.icon} ${esc(a.name)}</strong>${a.sub ? `<div class="sub">${esc(a.sub)}</div>` : a.home ? '<div class="sub">點此設定家裡地址</div>' : ''}</div></li>`;
+const itemHtml = r => {
+  const dur = r.duration, h = dur ? Math.min(180, Math.round(dur / 60 * 40)) : 0, e = endMin(r);
+  return `<li class="it" data-edit="itinerary:${r.id}"><div class="tm">${esc(r.time || '')}${e != null ? `<small>${fromMin(e)}</small>` : ''}</div><span class="ln"><i></i></span>
+    <div class="card" style="min-height:${h}px"><strong>${esc(r.title)}</strong>${dur ? `<span class="dur">${fmtMins(dur)}</span>` : ''}${r.place ? `<div class="sub">${esc(r.place)}</div>` : ''}${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}</div></li>`;
+};
+const gapHtml = px => px > 0 ? `<li class="gap" style="height:${px}px"><span></span><span class="ln"></span><span></span></li>` : '';
 const rawPlace = r => r?.place || r?.title || '';          // 使用者填寫的原文（Google 地圖連結用）
 const placeOf = rawPlace;                                   // 估算時間也只使用行程裡填寫的地點，不加任何額外文字
 const gmapUrl = (mode, from, to) => `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=${GMODE[mode] || 'transit'}`;
-const legHtml = r => { const m = MODES[r.mode], n = filesOf(r.id, 'transport').length, open = openLeg === r.id;
-  return `<li class="leg ${m ? 'set' : ''}"><span class="pill" data-trans="${r.id}">${m ? m[0] + ' ' + m[1] + (r.mins ? ' · 約 ' + fmtMins(r.mins) : '') : '＋ 交通方式'}${r.trans_note ? ' 📝' : ''}${n ? ' 📎' + n : ''}</span>${open ? legPanel(r) : ''}</li>`; };
+const legHtml = (r, prev) => {
+  const m = MODES[r.mode], n = filesOf(r.id, 'transport').length, open = openLeg === r.id;
+  const pe = endMin(prev), st = toMin(r.time), gap = pe != null && st != null ? st - pe : null;
+  const warn = gap == null ? '' : gap < 0 ? '⚠ 與上一個行程的時間重疊' : (r.mins && gap < r.mins ? `⚠ 交通約 ${r.mins} 分，但中間只有 ${gap} 分` : '');
+  return `<li class="leg ${m ? 'set' : ''}"><span></span><span class="ln"></span><div class="lc"><span class="pill" data-trans="${r.id}">${m ? m[0] + ' ' + m[1] + (r.mins ? ' · 約 ' + fmtMins(r.mins) : '') : '＋ 交通方式'}${r.trans_note ? ' 📝' : ''}${n ? ' 📎' + n : ''}</span>${warn ? `<div class="warn">${warn}</div>` : ''}${open ? legPanel(r) : ''}</div></li>`;
+};
 let geoNet = false;
 async function geocode(q) {
   const k = 'tw:geo:' + q, c = localStorage.getItem(k); if (c) return JSON.parse(c);
@@ -560,7 +627,7 @@ async function estimate(mode, from, to) {
   } catch (e) { return { error: '目前無法估算（需要網路），請手動輸入時間' }; }
 }
 function legPanel(r) {
-  const rows = dayRows(), prev = rows[rows.findIndex(x => x.id === r.id) - 1];
+  const rows = dayRows(), prev = prevOf(r.id);
   const opts = Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === r.mode ? 'selected' : ''}>${v[0]} ${v[1]}</option>`).join('');
   return `<div class="lpanel" data-lp="${r.id}"><div class="sub">${esc(prev?.place || prev?.title || '')} → ${esc(r.place || r.title)}</div>
     <label>交通方式</label><select name="mode"><option value="">（不設定，移除交通）</option>${opts}</select>
@@ -581,7 +648,7 @@ async function estLeg() {
   const pn = $('.lpanel'); if (!pn) return;
   const r = state.itinerary.find(x => x.id === pn.dataset.lp), mode = pn.querySelector('[name=mode]').value;
   if (!mode) return toast('請先選交通方式');
-  const rows = dayRows(), prev = rows[rows.findIndex(x => x.id === r.id) - 1], st = pn.querySelector('[data-eststat]');
+  const rows = dayRows(), prev = prevOf(r.id), st = pn.querySelector('[data-eststat]');
   st.textContent = '估算中…';
   const e = await estimate(mode, placeOf(prev), placeOf(r));
   if (e.mins) { pn.querySelector('[name=mins]').value = e.mins; st.textContent = `粗估約 ${fmtMins(e.mins)}（直線 ${e.km.toFixed(1)} 公里），實際請以 Google 地圖為準`; } else st.textContent = e.error;
@@ -593,14 +660,17 @@ async function saveLeg(id) {
     const mode = pn.querySelector('[name=mode]').value || null, m0 = pn.querySelector('[name=mins]').value;
     const row = { ...r, mode, mins: mode && m0 ? Math.round(+m0) : null, trans_note: pn.querySelector('[name=trans_note]').value.trim() || null };
     const files = [...(pn.querySelector('#tfiles')?.files || [])];
-    if (mode && !row.mins) { const rows = dayRows(), prev = rows[rows.findIndex(x => x.id === id) - 1], e = await estimate(mode, placeOf(prev), placeOf(row)); if (e.mins) row.mins = e.mins; }
+    if (mode && !row.mins) { const rows = dayRows(), prev = prevOf(id), e = await estimate(mode, placeOf(prev), placeOf(row)); if (e.mins) row.mins = e.mins; }
     openLeg = null;
     await saveRow('itinerary', row);
     if (files.length) { toast('附件上傳中…'); await uploadFiles('transport', id, files); await loadAll(); toast('附件已上傳'); }
   } finally { saving = false; }
 }
-const itineraryForm = row => `<details class="datebox"><summary>日期：${row.day ? fmtDay(row.day) : '未排日期'}　<span>更改</span></summary><label>日期</label><input name="day" type="date" value="${esc(row.day || '')}"></details>` +
-  FORMS.itinerary.fields.filter(f => f[0] !== 'day').map(f => fieldHtml(f, row[f[0]])).join('');
+const itineraryForm = row => {
+  const F = Object.fromEntries(FORMS.itinerary.fields.map(f => [f[0], f])), g = k => fieldHtml(F[k], row[k]);
+  return `<details class="datebox"><summary>日期：${row.day ? fmtDay(row.day) : '未排日期'}　<span>更改</span></summary><label>日期</label><input name="day" type="date" value="${esc(row.day || '')}"></details>` +
+    g('time') + g('end_time') + g('duration') + `<div class="sub">開始、結束、總時間填其中兩項，第三項會自動算出來。</div>` + g('title') + g('place') + g('note');
+};
 const catSelect = cid => `<label>類別</label><select name="cat_id"><option value="">未分類</option>${state.check_cats.filter(c => c.kind === 'restaurants').map(c => `<option value="${c.id}" ${c.id === cid ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>`;
 
 /* ===== 旅程首頁：依旅程名稱的主視覺、倒數、天氣 ===== */
@@ -725,10 +795,16 @@ const views = {
       const n = d && t0 ? Math.round((new Date(d + 'T00:00') - new Date(t0 + 'T00:00')) / 864e5) + 1 : 0;
       return `<button class="dchip ${d === selDay ? 'on' : ''}" data-day="${d}"><b>${d ? (n >= 1 ? 'D' + n : '其他') : '未排'}</b><span>${d ? d.slice(5).replace('-', '/') : '日期'}</span></button>`;
     }).join('');
-    const rows = dayRows();
-    return `<div class="days">${chips}</div><h2>${fmtDay(selDay)}</h2>` + (rows.length ? `<ul class="rail">${rows.map((r, i) => (i ? legHtml(r) : '') + `
-      <li data-edit="itinerary:${r.id}"><span class="time">${esc(r.time || '')}</span><strong>${esc(r.title)}</strong>
-      ${r.place ? `<div class="sub">${esc(r.place)}</div>` : ''}${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}</li>`).join('')}</ul>` : `<div class="empty small">這天還沒有安排，按右下角新增。</div>`) + add('itinerary');
+    const rows = dayRows(), sA = startAnchor(selDay), eA = endAnchor(selDay);
+    let h = sA ? ancHtml(sA) : '';
+    rows.forEach((r, i) => {
+      const prev = i ? rows[i - 1] : (sA?.place ? { title: sA.name, place: sA.place } : null);
+      if (prev) h += legHtml(r, prev);
+      if (i) { const pe = endMin(rows[i - 1]), st = toMin(r.time); if (pe != null && st != null && st > pe) h += gapHtml(Math.min(48, Math.round((st - pe) / 60 * 16))); }
+      h += itemHtml(r);
+    });
+    if (eA) h += ancHtml(eA);
+    return `<div class="days">${chips}</div><h2>${fmtDay(selDay)}</h2>` + (h ? `<ul class="tl">${h}</ul>` : `<div class="empty small">這天還沒有安排，按右下角新增。</div>`) + (rows.length || !h ? '' : `<div class="empty small">按右下角新增第一個行程。</div>`) + add('itinerary');
   },
   legCard(leg, title) {
     const fl = state.flights.filter(f => (f.leg || 'out') === leg).sort((a, b) => (a.dep_time || a.flight_date || '').localeCompare(b.dep_time || b.flight_date || ''));
@@ -883,7 +959,7 @@ document.addEventListener('change', e => {
   const sel = e.target.closest('.lpanel [name=mode]');
   if (sel) {
     const pn = sel.closest('.lpanel'), r = state.itinerary.find(x => x.id === pn.dataset.lp), rows = dayRows();
-    pn.querySelector('[data-gmap]').href = gmapUrl(sel.value, rawPlace(rows[rows.findIndex(x => x.id === r.id) - 1]), rawPlace(r)); return;
+    pn.querySelector('[data-gmap]').href = gmapUrl(sel.value, rawPlace(prevOf(r.id)), rawPlace(r)); return;
   }
   const el = e.target.closest('[data-toggle]'); if (!el) return;
   const r = state.check_items.find(x => x.id === el.dataset.toggle); if (!r) return;

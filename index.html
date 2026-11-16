@@ -132,6 +132,9 @@ body{background-image:linear-gradient(180deg,var(--sky) 0,var(--bg) 360px);backg
 .wxrow::-webkit-scrollbar{display:none}
 .wxd{flex:0 0 64px;background:var(--bg);border-radius:12px;padding:6px 4px;text-align:center;line-height:1.3}
 .wxi{font-size:1.5rem}
+.wxnow{margin:6px 0;font-size:1.05rem}
+.wxd.trip{background:var(--sun);color:#2b4a47}
+.wxd.trip .sub{color:#2b4a47}
 .cstat{margin:8px 0}
 .cs1{display:flex;justify-content:space-between;gap:8px}
 .cs1 small{color:var(--mute);font-size:.8rem}
@@ -186,6 +189,14 @@ const TRIP = new URLSearchParams(location.search).get('trip');   // 沒有 = 首
 const KEY = 'tw:data:' + TRIP;
 const CONFIGURED = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_KEY);
 const sb = (CONFIGURED && window.supabase) ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
+let authMsg = '';
+const ready = sb ? (async () => {       // 不需要使用者登入：每支裝置自動取得匿名身分，再用旅程代碼加入旅程
+  try {
+    const { data } = await sb.auth.getSession();
+    if (!data.session) { const r = await sb.auth.signInAnonymously(); if (r.error) { authMsg = r.error.message; return; } }
+    if (TRIP) await sb.rpc('join_trip', { p_code: TRIP });
+  } catch (e) { authMsg = String(e); }
+})() : Promise.resolve();
 let online = false, tab = 'trip', wxEdit = false, selDay = null, saving = false, infoTab = 'restaurants', openLeg = null;
 let trips = JSON.parse(localStorage.getItem('tw:trips') || '[]');
 let state = { itinerary: [], flights: [], lodging: [], info: [], members: [], expenses: [], restaurants: [], check_cats: [], check_items: [], tw_files: [], reminders: [] };
@@ -197,13 +208,14 @@ const curTrip = () => trips.find(t => t.id === TRIP);
 const persist = () => { localStorage.setItem('tw:trips', JSON.stringify(trips)); if (TRIP) localStorage.setItem(KEY, JSON.stringify(state)); };
 const canEdit = () => !CONFIGURED || online;
 const mname = id => state.members.find(m => m.id === id)?.name || '(已刪除)';
-const shortId = () => Math.random().toString(36).slice(2, 8);
+const shortId = () => [...crypto.getRandomValues(new Uint8Array(10))].map(b => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2200); }
 function setSync() { const s = $('#sync'); s.textContent = !CONFIGURED ? '本機模式' : online ? '已同步' : '離線，唯讀'; s.className = (!CONFIGURED || !online) ? 'off' : ''; }
 
 /* ===== 資料層 ===== */
 async function loadAll() {
   if (sb) {
+    await ready;
     try {
       const tr = await sb.from('tw_trips').select('*'); if (tr.error) throw tr.error;
       trips = tr.data;
@@ -211,10 +223,11 @@ async function loadAll() {
         const res = await Promise.all(TABLES.map(t => sb.from(t).select('*').eq('trip_id', TRIP)));
         res.forEach((r, i) => { if (r.error) throw r.error; state[TABLES[i]] = r.data; });
       }
+      await signFiles();
       online = true;
     } catch (e) { online = false; }
   }
-  if (TRIP && !curTrip() && (online || !CONFIGURED)) {          // 舊連結：自動補一筆旅程
+  if (TRIP && !curTrip() && !CONFIGURED) {          // 舊連結：自動補一筆旅程
     const t = { id: TRIP, name: TRIP }; trips.push(t);
     if (sb) sb.from('tw_trips').upsert(t);
   }
@@ -225,6 +238,11 @@ async function saveRow(t, row) {
   if (i >= 0) arr[i] = row; else arr.push(row);      // 先更新畫面，同 id 不會重複新增
   persist(); render();
   if (sb) {
+    if (t === 'tw_trips' && i < 0) {                   // 新旅程：由伺服器建立並自動加入成員
+      await ready;
+      const r = await sb.rpc('create_trip', { p_id: row.id, p_name: row.name, p_start: row.start_day, p_end: row.end_day });
+      if (!r.error && r.data) return loadAll();
+    }
     const { error } = await sb.from(t).upsert(t === 'tw_trips' ? row : { ...row, trip_id: TRIP });
     if (error) toast('儲存失敗：' + error.message);
     return loadAll();
@@ -260,8 +278,9 @@ async function delRow(t, id) {
   else state[t] = state[t].filter(r => r.id !== id);
   persist(); render();
 }
-function subscribe() {
+async function subscribe() {
   if (!sb) return;
+  await ready;
   let ch = sb.channel('tw-' + (TRIP || 'home')).on('postgres_changes', { event: '*', schema: 'public', table: 'tw_trips' }, loadAll);
   if (TRIP) TABLES.forEach(t => { ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: t, filter: 'trip_id=eq.' + TRIP }, loadAll); });
   ch.subscribe();
@@ -398,7 +417,13 @@ const link = u => /^https?:\/\//.test(u || '') ? `<a href="${esc(u)}" target="_b
 
 /* ===== 附件、航班查詢、地圖連結 ===== */
 const ATT = new Set(['restaurants', 'check_items']);
-const fileUrl = p => `${CONFIG.SUPABASE_URL}/storage/v1/object/public/tw-files/${p}`;
+const signed = {};
+const fileUrl = p => signed[p] || `${CONFIG.SUPABASE_URL}/storage/v1/object/public/tw-files/${p}`;
+async function signFiles() {
+  if (!sb) return;
+  const ps = state.tw_files.map(f => f.path).filter(p => !signed[p]); if (!ps.length) return;
+  try { const { data } = await sb.storage.from('tw-files').createSignedUrls(ps, 21600); (data || []).forEach(d => { if (d.signedUrl) signed[d.path] = d.signedUrl; }); } catch (e) {}
+}
 const fileChip = f => /^image\//.test(f.mime || '')
   ? `<a href="${esc(fileUrl(f.path))}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(fileUrl(f.path))}" alt="${esc(f.name)}"></a>`
   : `<a class="file" href="${esc(fileUrl(f.path))}" target="_blank" rel="noopener">📄 ${esc(f.name || '檔案')}</a>`;
@@ -631,47 +656,46 @@ function cdBig(t) {
 }
 const homeHero = t => `<div class="hero big home">${heroScene(t?.name)}<div class="hl"><h1>${esc(t?.name || '旅程')}</h1><div class="cd">${cdBig(t)}</div>${t?.start_day ? `<div class="dr">${t.start_day.replace(/-/g, '/')}${t.end_day ? ' – ' + t.end_day.slice(5).replace('-', '/') : ''}</div>` : ''}</div><button class="mini editb" data-edit="tw_trips:${esc(TRIP)}">✎ 編輯旅程</button></div>`;
 const WX = c => c === 0 ? '☀️' : c <= 2 ? '🌤️' : c === 3 ? '☁️' : c <= 48 ? '🌫️' : c <= 57 ? '🌦️' : c <= 67 ? '🌧️' : c <= 77 ? '🌨️' : c <= 82 ? '🌧️' : c <= 86 ? '🌨️' : '⛈️';
-let wx = { key: '', rows: [], msg: '', loading: false };
-const wxKey = t => t?.weather_place && t?.start_day ? [t.weather_place, t.start_day, t.end_day || t.start_day].join('|') : '';
-const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const dateRange = (a, b) => { const out = []; for (let d = new Date(a + 'T00:00'), e = new Date(b + 'T00:00'); d <= e && out.length < 30; d.setDate(d.getDate() + 1)) out.push(ymd(d)); return out; };
+let wx = { key: '', rows: [], now: null, msg: '', loading: false };
+const wxKey = t => t?.weather_place || '';
 const getJSON = async u => { const r = await fetch(u); if (!r.ok) throw new Error(r.status); return r.json(); };
 async function geoCity(name) {
-  const k = 'tw:geoc:' + name, c = localStorage.getItem(k); if (c) return JSON.parse(c);
-  const j = await getJSON('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name=' + encodeURIComponent(name));
-  const r = j.results?.[0]; if (!r) return null;
-  const v = { lat: r.latitude, lon: r.longitude }; localStorage.setItem(k, JSON.stringify(v)); return v;
+  const k = 'tw:geoc2:' + name, c = localStorage.getItem(k); if (c) return JSON.parse(c);
+  let v = null;
+  try { const j = await getJSON('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh-TW&q=' + encodeURIComponent(name)); if (j[0]) v = { lat: +j[0].lat, lon: +j[0].lon }; } catch (e) {}
+  if (!v) { try { const j = await getJSON('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name=' + encodeURIComponent(name)); const r = j.results?.[0]; if (r) v = { lat: r.latitude, lon: r.longitude }; } catch (e) {} }
+  if (v) localStorage.setItem(k, JSON.stringify(v));
+  return v;
 }
 async function fetchWeather(t) {
-  const key = wxKey(t), ck = 'tw:wx:' + key, c = JSON.parse(localStorage.getItem(ck) || 'null');
-  if (c && Date.now() - c.t < 3 * 3600e3) return c.rows;
+  const ck = 'tw:wx2:' + t.weather_place, c = JSON.parse(localStorage.getItem(ck) || 'null');
+  if (c && Date.now() - c.t < 3600e3) return c.data;
   const g = await geoCity(t.weather_place); if (!g) throw new Error('nogeo');
-  const days = dateRange(t.start_day, t.end_day || t.start_day).slice(0, 16);
-  const today = ymd(new Date()), lim = ymd(addDays(new Date(), 15));
-  const fc = days.filter(d => d >= today && d <= lim), past = days.filter(d => d < today), far = days.filter(d => d > lim), out = {};
-  const base = `latitude=${g.lat}&longitude=${g.lon}&timezone=auto&daily=weather_code,temperature_2m_max,temperature_2m_min`;
-  const put = (j, kind, back) => j.daily.time.forEach((d, i) => {
-    const dd = back ? (+d.slice(0, 4) + 1) + d.slice(4) : d;
-    out[dd] = { d: dd, kind, code: j.daily.weather_code[i], hi: j.daily.temperature_2m_max[i], lo: j.daily.temperature_2m_min[i], pop: j.daily.precipitation_probability_max?.[i], rain: j.daily.precipitation_sum?.[i] };
-  });
-  if (fc.length) put(await getJSON(`https://api.open-meteo.com/v1/forecast?${base},precipitation_probability_max&start_date=${fc[0]}&end_date=${fc[fc.length - 1]}`), 'forecast');
-  if (past.length) put(await getJSON(`https://archive-api.open-meteo.com/v1/archive?${base},precipitation_sum&start_date=${past[0]}&end_date=${past[past.length - 1]}`), 'actual');
-  if (far.length) { const sh = d => (+d.slice(0, 4) - 1) + d.slice(4); put(await getJSON(`https://archive-api.open-meteo.com/v1/archive?${base},precipitation_sum&start_date=${sh(far[0])}&end_date=${sh(far[far.length - 1])}`), 'lastyear', true); }
-  const rows = days.map(d => out[d]).filter(Boolean);
-  localStorage.setItem(ck, JSON.stringify({ t: Date.now(), rows })); return rows;
+  const j = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${g.lat}&longitude=${g.lon}&timezone=auto&forecast_days=16&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max`);
+  const data = { now: j.current ? { temp: j.current.temperature_2m, code: j.current.weather_code } : null,
+    rows: j.daily.time.map((d, i) => ({ d, code: j.daily.weather_code[i], hi: j.daily.temperature_2m_max[i], lo: j.daily.temperature_2m_min[i], pop: j.daily.precipitation_probability_max[i] })) };
+  localStorage.setItem(ck, JSON.stringify({ t: Date.now(), data })); return data;
 }
 async function ensureWeather() {
   const t = curTrip(), key = wxKey(t);
   if (!key || wx.key === key || wx.loading) return;
-  wx = { key, rows: [], msg: '天氣載入中…', loading: true }; render();
-  try { wx = { key, rows: await fetchWeather(t), msg: '', loading: false }; }
+  wx = { key, rows: [], now: null, msg: '天氣載入中…', loading: true }; render();
+  try { const d = await fetchWeather(t); wx = { key, rows: d.rows, now: d.now, msg: '', loading: false }; }
   catch (e) {
-    const c = JSON.parse(localStorage.getItem('tw:wx:' + key) || 'null');
-    wx = { key, rows: c?.rows || [], msg: e.message === 'nogeo' ? '找不到這個地點，請換個城市名稱' : '天氣暫時無法取得' + (c ? '，顯示上次的資料' : ''), loading: false };
+    const c = JSON.parse(localStorage.getItem('tw:wx2:' + key) || 'null');
+    wx = { key, rows: c?.data.rows || [], now: c?.data.now || null, msg: e.message === 'nogeo' ? '找不到這個地點，請換個名稱試試（城市名或知名地標）' : '天氣暫時無法取得' + (c ? '，顯示上次的資料' : ''), loading: false };
   }
   render();
 }
 
+async function joinTrip() {
+  const v = (prompt('貼上旅程連結，或輸入旅程代碼') || '').trim(); if (!v) return;
+  let code = v; try { code = new URL(v).searchParams.get('trip') || v; } catch (e) {}
+  if (!sb) return toast('需要連線雲端才能加入旅程');
+  await ready;
+  const r = await sb.rpc('join_trip', { p_code: code });
+  if (r.data) location.search = '?trip=' + encodeURIComponent(code); else toast(r.error ? '加入失敗，請稍後再試' : '找不到這個旅程代碼');
+}
 const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 function tripDays() {          // 旅程出發日～回程日自動展開，再加上行程裡出現過的日期
   const t = curTrip(), set = new Set(state.itinerary.map(r => r.day).filter(Boolean));
@@ -686,7 +710,7 @@ function tripDays() {          // 旅程出發日～回程日自動展開，再�
 const views = {
   home() {
     const rows = [...trips].sort((a, b) => (a.start_day || '9').localeCompare(b.start_day || '9'));
-    return `<div class="hero big">${scene('big')}<div class="hl"><h1>旅行手帳</h1><p>今天，要去哪裡呢？</p></div></div>` +
+    return `<div class="hero big">${scene('big')}<div class="hl"><h1>旅行手帳</h1><p>今天，要去哪裡呢？</p></div></div><div class="catbar"><button class="mini" data-join>🔗 用代碼或連結加入旅程</button></div>` +
       (rows.length ? rows.map((t, i) => `<div class="trip" style="--i:${i + 1}" data-go="${esc(t.id)}">${art(t.id)}<span class="badge">${countdown(t) || '尚未排日期'}</span><button class="ed" data-edit="tw_trips:${esc(t.id)}" aria-label="編輯">✎</button>
         <div class="tb"><strong>${esc(t.name)}</strong><div class="sub">${range(t)}</div></div></div>`).join('')
         : `<div class="empty">還沒有旅程，按右下角出發吧。</div>`) + add('tw_trips');
@@ -715,17 +739,15 @@ const views = {
   },
   weather() {
     const t = curTrip(), place = t?.weather_place, ok = wx.key === wxKey(t);
-    let b;
-    if (!t?.start_day) b = `<div class="empty small">請先編輯旅程，設定出發日與回程日。</div>`;
-    else {
-      b = (!place || wxEdit) ? `<div class="wxset"><input id="wxplace" placeholder="輸入城市，例如：札幌" value="${esc(place || '')}"><button class="mini" data-wxsave>查詢</button></div>`
-        : `<div class="sub">📍 ${esc(place)}　<button class="mini" data-wxedit>更改地點</button></div>`;
-      if (place && ok) {
-        if (wx.msg) b += `<div class="sub">${esc(wx.msg)}</div>`;
-        if (wx.rows.length) {
-          b += `<div class="wxrow">${wx.rows.map(r => `<div class="wxd"><div class="sub">${new Date(r.d + 'T00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</div><div class="wxi">${WX(r.code)}</div><div><b>${Math.round(r.hi)}°</b> <span class="sub">${Math.round(r.lo)}°</span></div><div class="sub">${r.kind === 'forecast' ? '💧' + (r.pop ?? '–') + '%' : r.rain != null ? Math.round(r.rain) + ' mm' : ''}</div></div>`).join('')}</div>`;
-          if (wx.rows.some(r => r.kind === 'lastyear')) b += `<div class="sub">出發日還沒到預報範圍（約 16 天內），這裡顯示去年同期的天氣，僅供參考。</div>`;
-        }
+    const inTrip = d => t?.start_day && d >= t.start_day && d <= (t.end_day || t.start_day), today = ymd(new Date());
+    let b = (!place || wxEdit) ? `<div class="wxset"><input id="wxplace" placeholder="輸入地點，例如：札幌、Sapporo" value="${esc(place || '')}"><button class="mini" data-wxsave>查詢</button></div>`
+      : `<div class="sub">📍 ${esc(place)}　<button class="mini" data-wxedit>更改地點</button></div>`;
+    if (place && ok) {
+      if (wx.msg) b += `<div class="sub">${esc(wx.msg)}</div>`;
+      if (wx.now) b += `<div class="wxnow">${WX(wx.now.code)} <b>現在 ${Math.round(wx.now.temp)}°</b></div>`;
+      if (wx.rows.length) {
+        b += `<div class="wxrow">${wx.rows.map(r => `<div class="wxd ${inTrip(r.d) ? 'trip' : ''}"><div class="sub">${r.d === today ? '今天' : new Date(r.d + 'T00:00').toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</div><div class="wxi">${WX(r.code)}</div><div><b>${Math.round(r.hi)}°</b> <span class="sub">${Math.round(r.lo)}°</span></div><div class="sub">💧${r.pop ?? '–'}%</div></div>`).join('')}</div>`;
+        if (t?.start_day) b += `<div class="sub">${wx.rows.some(r => inTrip(r.d)) ? '黃色底是旅程日期。' : '旅程日期還在預報範圍（未來 16 天）之外，先顯示目前的預報。'}</div>`;
       }
     }
     return `<div class="legcard"><h2>🌤 天氣預報</h2>${b}</div>`;
@@ -828,18 +850,20 @@ function render() {
   v.innerHTML = head + (TRIP ? views[tab]() : views.home());
   fresh = false;
   $('.dchip.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  { const c = $('.wxrow'), e = $('.wxd.trip'); if (c && e) c.scrollLeft = e.offsetLeft - c.offsetLeft - 8; }
   if (TRIP && tab === 'trip') ensureWeather();
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-test],[data-fold],[data-foldall],[data-wxsave],[data-wxedit],[data-catpick]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-test],[data-fold],[data-foldall],[data-wxsave],[data-wxedit],[data-catpick],[data-join]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
   else if ('day' in el.dataset) { selDay = el.dataset.day; openLeg = null; render(); }
   else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
   else if (el.dataset.preset) addPreset(el.dataset.preset);
   else if (el.dataset.rmfile) rmFile(el.dataset.rmfile);
   else if (el.dataset.trans) toggleLeg(el.dataset.trans);
-  else if ('wxsave' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); const v = ($('#wxplace')?.value || '').trim(); wxEdit = false; wx = { key: '', rows: [], msg: '', loading: false }; saveRow('tw_trips', { ...curTrip(), weather_place: v || null }); }
+  else if ('wxsave' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); const v = ($('#wxplace')?.value || '').trim(); if (!curTrip()) return toast('找不到這趟旅程'); wxEdit = false; wx = { key: '', rows: [], msg: '', loading: false }; saveRow('tw_trips', { ...curTrip(), weather_place: v || null }); }
+  else if ('join' in el.dataset) joinTrip();
   else if ('wxedit' in el.dataset) { wxEdit = true; render(); }
   else if ('catpick' in el.dataset) { const i = $('[name=category]'); if (i) i.value = el.dataset.catpick; }
   else if ('tsave' in el.dataset) saveLeg(el.dataset.tsave);

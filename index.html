@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
+<link rel="preconnect" href="https://api.open-meteo.com">
+<link rel="preconnect" href="https://geocoding-api.open-meteo.com">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>旅行手帳</title>
@@ -78,7 +80,7 @@ th{font-size:.85rem;color:var(--mute);font-weight:600}
 .legcard{background:var(--card);border-radius:16px;padding:2px 14px 12px;margin:14px 0;box-shadow:0 2px 0 var(--line)}
 .legcard h2{margin:12px 0 4px}
 .fl{padding:10px 0;border-top:1px dashed var(--line);cursor:pointer}
-.fl .route{font-size:1.1rem}
+.fl .route{font-size:1rem;line-height:1.5}
 .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
 .thumbs img{width:64px;height:64px;object-fit:cover;border-radius:10px;display:block}
 .file{display:inline-block;padding:6px 10px;border-radius:10px;background:var(--bg);font-size:.85rem;text-decoration:none}
@@ -127,7 +129,7 @@ body{background-image:linear-gradient(180deg,var(--sky) 0,var(--bg) 360px);backg
 .ilh{display:flex;justify-content:space-between;align-items:center}
 .ilh b{font:700 1.05rem var(--serif)}
 .ilh+.fl{border-top:0}
-.wxset{display:flex;gap:8px;margin:6px 0}
+.wxset{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap}.wxset input{flex:1 1 140px;min-width:0}.wxbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0}
 .wxrow{display:flex;gap:8px;overflow-x:auto;margin:8px -4px 4px;padding:2px 4px 6px;scrollbar-width:none}
 .wxrow::-webkit-scrollbar{display:none}
 .wxd{flex:0 0 64px;background:var(--bg);border-radius:12px;padding:6px 4px;text-align:center;line-height:1.3}
@@ -387,6 +389,7 @@ $('#frm').onsubmit = async e => {
         if (r && !r.error) { for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) row[k] = r[k] || row[k]; }
         else toast(flightMsg(r?.error, r?.detail));
       }
+      row.dep_airport = apZh(row.dep_airport); row.arr_airport = apZh(row.arr_airport);
     }
     const files = [...($('#files')?.files || [])];
     $('#dlg').close();
@@ -493,6 +496,12 @@ function flightForm(row) {
     <div class="btns"><button type="button" id="lookup">自動查詢起降資料</button></div><div class="sub" id="lkst">只填航班編號和日期，儲存時會自動帶入。</div>
     <details ${row.dep_airport ? 'open' : ''}><summary>起降資訊（可手動修改或補充）</summary>${FORMS.flights.fields.map(f => fieldHtml(f, row[f[0]])).join('')}</details>`;
 }
+const AIRPORTS = Object.fromEntries('TSA:松山機場,TPE:桃園國際機場,KHH:高雄國際機場,RMQ:臺中機場,TNN:臺南機場,HUN:花蓮機場,TTT:臺東機場,MZG:澎湖機場,KNH:金門機場,MFK:馬祖南竿機場,LZN:馬祖北竿機場,CYI:嘉義機場,GNI:綠島機場,KYD:蘭嶼機場,HND:東京羽田機場,NRT:東京成田機場,KIX:大阪關西機場,ITM:大阪伊丹機場,UKB:神戶機場,NGO:名古屋中部機場,NKM:名古屋小牧機場,FUK:福岡機場,CTS:札幌新千歲機場,OKD:札幌丘珠機場,HKD:函館機場,AKJ:旭川機場,KUH:釧路機場,MMB:女滿別機場,OBO:帶廣機場,SDJ:仙台機場,AOJ:青森機場,HNA:花卷機場,AXT:秋田機場,GAJ:山形機場,FKS:福島機場,KIJ:新潟機場,TOY:富山機場,KMQ:小松機場,IBR:茨城機場,FSZ:靜岡機場,OKA:沖繩那霸機場,ISG:石垣機場,MMY:宮古機場,KMI:宮崎機場,KOJ:鹿兒島機場,KMJ:熊本機場,NGS:長崎機場,OIT:大分機場,HSG:佐賀機場,MYJ:愛媛松山機場,TAK:高松機場,TKS:德島機場,KCZ:高知機場,HIJ:廣島機場,OKJ:岡山機場,UBJ:山口宇部機場,IWK:岩國機場,TTJ:鳥取機場,YGJ:米子機場,IZO:出雲機場,KKJ:北九州機場,ICN:首爾仁川國際機場,GMP:首爾金浦機場,PUS:釜山金海機場,CJU:濟州國際機場,TAE:大邱機場,CJJ:清州機場,KWJ:光州機場,HKG:香港國際機場,MFM:澳門國際機場,PEK:北京首都機場,PKX:北京大興機場,PVG:上海浦東機場,SHA:上海虹橋機場,CAN:廣州白雲機場,SZX:深圳寶安機場,CTU:成都雙流機場,TFU:成都天府機場,CKG:重慶江北機場,XIY:西安咸陽機場,HGH:杭州蕭山機場,NKG:南京祿口機場,XMN:廈門高崎機場,FOC:福州長樂機場,TAO:青島膠東機場,TSN:天津濱海機場,WUH:武漢天河機場,CSX:長沙黃花機場,KMG:昆明長水機場,HAK:海口美蘭機場,SYX:三亞鳳凰機場,DLC:大連周水子機場,SHE:瀋陽桃仙機場,HRB:哈爾濱太平機場,URC:烏魯木齊地窩堡機場,LXA:拉薩貢嘎機場,BKK:曼谷素萬那普機場,DMK:曼谷廊曼機場,HKT:普吉島機場,CNX:清邁機場,SIN:新加坡樟宜機場,KUL:吉隆坡國際機場,PEN:檳城機場,BKI:亞庇機場,KCH:古晉機場,LGK:蘭卡威機場,SGN:胡志明市新山一機場,HAN:河內內排機場,DAD:峴港機場,CXR:芽莊金蘭機場,PQC:富國島機場,MNL:馬尼拉尼諾伊·艾奎諾機場,CEB:宿霧麥克坦機場,CRK:克拉克機場,KLO:長灘島卡利博機場,DPS:峇里島伍拉·賴機場,CGK:雅加達蘇加諾-哈達機場,SUB:泗水朱安達機場,REP:暹粒機場,PNH:金邊機場,VTE:永珍瓦岱機場,RGN:仰光機場,DEL:德里英迪拉·甘地機場,BOM:孟買機場,CMB:可倫坡機場,KTM:加德滿都機場,MLE:馬累機場,DAC:達卡機場,SYD:雪梨機場,MEL:墨爾本機場,BNE:布里斯本機場,PER:伯斯機場,AKL:奧克蘭機場,CHC:基督城機場,GUM:關島機場,SPN:塞班機場,HNL:檀香山機場,LAX:洛杉磯機場,SFO:舊金山機場,SEA:西雅圖機場,JFK:紐約甘迺迪機場,EWR:紐約紐華克機場,ORD:芝加哥歐海爾機場,DFW:達拉斯機場,IAH:休士頓機場,ATL:亞特蘭大機場,YVR:溫哥華機場,YYZ:多倫多機場,LHR:倫敦希斯洛機場,LGW:倫敦蓋特威克機場,CDG:巴黎戴高樂機場,ORY:巴黎奧利機場,FRA:法蘭克福機場,MUC:慕尼黑機場,AMS:阿姆斯特丹史基浦機場,FCO:羅馬菲烏米奇諾機場,MXP:米蘭馬爾彭薩機場,MAD:馬德里機場,BCN:巴塞隆納機場,VIE:維也納機場,ZRH:蘇黎世機場,PRG:布拉格機場,IST:伊斯坦堡機場,DXB:杜拜機場,DOH:杜哈機場,AUH:阿布達比機場'.split(',').map(x => x.split(':')));
+const apZh = v => {                                   // 機場代碼 → 中文名稱（代碼）；已含中文或查不到就維持原樣
+  const s = (v || '').trim(); if (!s || /[\u4e00-\u9fff]/.test(s)) return s;
+  const m = s.match(/\b([A-Za-z]{3})\b/), c = m && m[1].toUpperCase();
+  return c && AIRPORTS[c] ? `${AIRPORTS[c]}（${c}）` : s;
+};
 const flightMsg = (err, detail) => ({ no_key: '尚未設定航班查詢金鑰，請手動填入起降資訊', not_found: '查不到這個航班，請確認編號與日期，或手動填入', local: '本機模式無法自動查詢，請手動填入', bad_input: '航班編號或日期格式不對', fn: '查詢功能沒有回應，請手動填入' }[err] || `航班查詢失敗（${err || '未知'}${detail ? '：' + String(detail).slice(0, 80) : ''}），請手動填入`);
 async function lookupFlight(no, date) {
   if (!sb) return { error: 'local' };
@@ -546,7 +555,7 @@ function wireForm(t) {
     $('#lkst').textContent = '查詢中…';
     const r = await lookupFlight(no, d);
     if (r && !r.error) {
-      for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) $(`[name=${k}]`).value = r[k] || '';
+      for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) $(`[name=${k}]`).value = /airport/.test(k) ? apZh(r[k] || '') : (r[k] || '');
       $('#lkst').textContent = '已帶入' + (r.airline ? '（' + r.airline + '）' : ''); $('details').open = true;
     } else $('#lkst').textContent = flightMsg(r?.error, r?.detail);
   };
@@ -726,36 +735,58 @@ function cdBig(t) {
 }
 const homeHero = t => `<div class="hero big home">${heroScene(t?.name)}<div class="hl"><h1>${esc(t?.name || '旅程')}</h1><div class="cd">${cdBig(t)}</div>${t?.start_day ? `<div class="dr">${t.start_day.replace(/-/g, '/')}${t.end_day ? ' – ' + t.end_day.slice(5).replace('-', '/') : ''}</div>` : ''}</div><button class="mini editb" data-edit="tw_trips:${esc(TRIP)}">✎ 編輯旅程</button></div>`;
 const WX = c => c === 0 ? '☀️' : c <= 2 ? '🌤️' : c === 3 ? '☁️' : c <= 48 ? '🌫️' : c <= 57 ? '🌦️' : c <= 67 ? '🌧️' : c <= 77 ? '🌨️' : c <= 82 ? '🌧️' : c <= 86 ? '🌨️' : '⛈️';
-let wx = { key: '', rows: [], now: null, msg: '', loading: false };
-const wxKey = t => t?.weather_place || '';
-const getJSON = async u => { const r = await fetch(u); if (!r.ok) throw new Error(r.status); return r.json(); };
+let wx = { key: '', rows: [], now: null, msg: '', loading: false }, wxLive = null;
+const wxKey = t => wxLive ? '@' + wxLive.lat.toFixed(2) + ',' + wxLive.lon.toFixed(2) : (t?.weather_place || '');
+const getJSON = async (u, ms = 0) => {
+  const c = new AbortController(), id = ms ? setTimeout(() => c.abort(), ms) : 0;
+  try { const r = await fetch(u, { signal: c.signal }); if (!r.ok) throw new Error(r.status); return await r.json(); } finally { clearTimeout(id); }
+};
+const wxCache = k => { try { return JSON.parse(localStorage.getItem('tw:wx2:' + k) || 'null'); } catch (e) { return null; } };
 async function geoCity(name) {
   const k = 'tw:geoc2:' + name, c = localStorage.getItem(k); if (c) return JSON.parse(c);
-  let v = null;
-  try { const j = await getJSON('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh-TW&q=' + encodeURIComponent(name)); if (j[0]) v = { lat: +j[0].lat, lon: +j[0].lon }; } catch (e) {}
-  if (!v) { try { const j = await getJSON('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name=' + encodeURIComponent(name)); const r = j.results?.[0]; if (r) v = { lat: r.latitude, lon: r.longitude }; } catch (e) {} }
+  const q = encodeURIComponent(name);
+  const om = getJSON('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name=' + q, 5000).then(j => { const r = j.results?.[0]; if (!r) throw 0; return { lat: r.latitude, lon: r.longitude }; });
+  const nm = getJSON('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh-TW&q=' + q, 6000).then(j => { if (!j[0]) throw 0; return { lat: +j[0].lat, lon: +j[0].lon }; });
+  let v = null; try { v = await Promise.any([om, nm]); } catch (e) {}      // 兩個地名服務同時查，誰先回來用誰
   if (v) localStorage.setItem(k, JSON.stringify(v));
   return v;
 }
-async function fetchWeather(t) {
-  const ck = 'tw:wx2:' + t.weather_place, c = JSON.parse(localStorage.getItem(ck) || 'null');
-  if (c && Date.now() - c.t < 3600e3) return c.data;
-  const g = await geoCity(t.weather_place); if (!g) throw new Error('nogeo');
-  const j = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${g.lat}&longitude=${g.lon}&timezone=auto&forecast_days=16&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max`);
+async function fetchWeather(key) {
+  const g = key[0] === '@' ? (([lat, lon]) => ({ lat, lon }))(key.slice(1).split(',').map(Number)) : await geoCity(key);
+  if (!g) throw new Error('nogeo');
+  const j = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${g.lat}&longitude=${g.lon}&timezone=auto&forecast_days=16&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max`, 10000);
   const data = { now: j.current ? { temp: j.current.temperature_2m, code: j.current.weather_code } : null,
     rows: j.daily.time.map((d, i) => ({ d, code: j.daily.weather_code[i], hi: j.daily.temperature_2m_max[i], lo: j.daily.temperature_2m_min[i], pop: j.daily.precipitation_probability_max[i] })) };
-  localStorage.setItem(ck, JSON.stringify({ t: Date.now(), data })); return data;
+  try { localStorage.setItem('tw:wx2:' + key, JSON.stringify({ t: Date.now(), data })); } catch (e) {}
+  return data;
 }
 async function ensureWeather() {
   const t = curTrip(), key = wxKey(t);
   if (!key || wx.key === key || wx.loading) return;
-  wx = { key, rows: [], now: null, msg: '天氣載入中…', loading: true }; render();
-  try { const d = await fetchWeather(t); wx = { key, rows: d.rows, now: d.now, msg: '', loading: false }; }
-  catch (e) {
-    const c = JSON.parse(localStorage.getItem('tw:wx2:' + key) || 'null');
+  const c = wxCache(key), fresh = c && Date.now() - c.t < 3600e3;      // 有舊資料就先顯示，背景再更新
+  wx = c ? { key, rows: c.data.rows, now: c.data.now, msg: fresh ? '' : '更新中…', loading: !fresh }
+         : { key, rows: [], now: null, msg: '天氣載入中…', loading: true };
+  render(); if (fresh) return;
+  try {
+    const d = await fetchWeather(key);
+    if (key !== wxKey(curTrip())) { wx = { key: '', rows: [], now: null, msg: '', loading: false }; return render(); }
+    wx = { key, rows: d.rows, now: d.now, msg: '', loading: false };
+  } catch (e) {
     wx = { key, rows: c?.data.rows || [], now: c?.data.now || null, msg: e.message === 'nogeo' ? '找不到這個地點，請換個名稱試試（城市名或知名地標）' : '天氣暫時無法取得' + (c ? '，顯示上次的資料' : ''), loading: false };
   }
   render();
+}
+function wxUseLive() {                                  // 即時位置：只在這支手機顯示，不會改動旅程的天氣地點
+  if (!navigator.geolocation) return toast('這個瀏覽器不支援定位');
+  toast('定位中…');
+  navigator.geolocation.getCurrentPosition(p => {
+    const lat = p.coords.latitude, lon = p.coords.longitude;
+    wxLive = { lat, lon, name: '' }; wxEdit = false; wx = { key: '', rows: [], now: null, msg: '', loading: false }; render();
+    getJSON(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=10&accept-language=zh-TW&lat=${lat}&lon=${lon}`, 4000).then(j => {
+      const a = j.address || {}, n = a.city || a.town || a.county || a.state || '';
+      if (n && wxLive && wxLive.lat === lat) { wxLive.name = n; if (!wxEdit) render(); }
+    }).catch(() => {});
+  }, err => toast(err.code === 1 ? '沒有定位權限，請到手機或瀏覽器設定允許位置' : '定位失敗，請稍後再試'), { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
 }
 
 async function joinTrip() {
@@ -809,16 +840,16 @@ const views = {
   legCard(leg, title) {
     const fl = state.flights.filter(f => (f.leg || 'out') === leg).sort((a, b) => (a.dep_time || a.flight_date || '').localeCompare(b.dep_time || b.flight_date || ''));
     return `<div class="inleg"><div class="ilh"><b>${title}</b><button class="mini" data-add="flights" data-leg="${leg}">＋ 航班</button></div>` +
-      (fl.length ? fl.map(f => `<div class="fl" data-edit="flights:${f.id}"><div class="route">${esc(f.dep_airport || '—')}<span>✈</span>${esc(f.arr_airport || '—')}</div>
+      (fl.length ? fl.map(f => `<div class="fl" data-edit="flights:${f.id}"><div class="route">${esc(apZh(f.dep_airport) || '—')}<span>✈</span>${esc(apZh(f.arr_airport) || '—')}</div>
         <div class="sub">${esc(f.flight_no || '')}${f.flight_date ? ' · ' + fmtDay(f.flight_date) : ''}${f.booking_ref ? ' · 訂位 ' + esc(f.booking_ref) : ''}</div>
         <div class="sub">${fmtDT(f.dep_time)} → ${fmtDT(f.arr_time)}</div>${f.note ? `<p class="note">${esc(f.note)}</p>` : ''}</div>`).join('') : `<div class="empty small">還沒有${title}航班</div>`) + `</div>`;
   },
   weather() {
-    const t = curTrip(), place = t?.weather_place, ok = wx.key === wxKey(t);
+    const t = curTrip(), live = !!wxLive, place = live ? '' : t?.weather_place, ok = wx.key === wxKey(t);
     const inTrip = d => t?.start_day && d >= t.start_day && d <= (t.end_day || t.start_day), today = ymd(new Date());
-    let b = (!place || wxEdit) ? `<div class="wxset"><input id="wxplace" placeholder="輸入地點，例如：札幌、Sapporo" value="${esc(place || '')}"><button class="mini" data-wxsave>查詢</button></div>`
-      : `<div class="sub">📍 ${esc(place)}　<button class="mini" data-wxedit>更改地點</button></div>`;
-    if (place && ok) {
+    let b = ((!place && !live) || wxEdit) ? `<div class="wxset"><input id="wxplace" placeholder="輸入地點，例如：札幌、Sapporo" value="${esc(place || t?.weather_place || '')}"><button class="mini" data-wxsave>查詢</button><button class="mini" data-wxlive>📍 即時位置</button></div>`
+      : `<div class="wxbar"><span class="sub">📍 ${live ? esc(wxLive.name || '目前位置') + '（即時位置）' : esc(place)}</span><button class="mini" data-wxedit>更改地點</button><button class="mini" data-wxlive>📍 即時位置</button>${live && t?.weather_place ? '<button class="mini" data-wxback>回旅程地點</button>' : ''}</div>`;
+    if ((place || live) && ok) {
       if (wx.msg) b += `<div class="sub">${esc(wx.msg)}</div>`;
       if (wx.now) b += `<div class="wxnow">${WX(wx.now.code)} <b>現在 ${Math.round(wx.now.temp)}°</b></div>`;
       if (wx.rows.length) {
@@ -931,16 +962,18 @@ function render() {
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-test],[data-fold],[data-foldall],[data-wxsave],[data-wxedit],[data-catpick],[data-join]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-test],[data-fold],[data-foldall],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
   else if ('day' in el.dataset) { selDay = el.dataset.day; openLeg = null; render(); }
   else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
   else if (el.dataset.preset) addPreset(el.dataset.preset);
   else if (el.dataset.rmfile) rmFile(el.dataset.rmfile);
   else if (el.dataset.trans) toggleLeg(el.dataset.trans);
-  else if ('wxsave' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); const v = ($('#wxplace')?.value || '').trim(); if (!curTrip()) return toast('找不到這趟旅程'); wxEdit = false; wx = { key: '', rows: [], msg: '', loading: false }; saveRow('tw_trips', { ...curTrip(), weather_place: v || null }); }
+  else if ('wxsave' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); const v = ($('#wxplace')?.value || '').trim(); if (!curTrip()) return toast('找不到這趟旅程'); wxEdit = false; wxLive = null; wx = { key: '', rows: [], now: null, msg: '', loading: false }; saveRow('tw_trips', { ...curTrip(), weather_place: v || null }); }
   else if ('join' in el.dataset) joinTrip();
   else if ('wxedit' in el.dataset) { wxEdit = true; render(); }
+  else if ('wxlive' in el.dataset) wxUseLive();
+  else if ('wxback' in el.dataset) { wxLive = null; wxEdit = false; wx = { key: '', rows: [], now: null, msg: '', loading: false }; render(); }
   else if ('catpick' in el.dataset) { const i = $('[name=category]'); if (i) i.value = el.dataset.catpick; }
   else if ('tsave' in el.dataset) saveLeg(el.dataset.tsave);
   else if ('tcancel' in el.dataset) { openLeg = null; render(); }

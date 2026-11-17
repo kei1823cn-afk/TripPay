@@ -187,17 +187,21 @@ dialog:has(.itf){width:100%;max-width:none;margin:auto 0 0;border-radius:26px 26
 .itf .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .itf label{margin:16px 0 6px;font-weight:700;font-size:.95rem;color:var(--ink)}
 .itf input,.itf select,.itf textarea{padding:13px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-size:1.05rem}
-.itf input[type=time]{background:var(--bg);text-align:center;min-height:50px}
+.itf .two>div{min-width:0}
+.itf input[type=time],.itf select{display:block;box-sizing:border-box;width:100%;min-width:0;height:52px;margin:0;-webkit-appearance:none;appearance:none}
+.itf input[type=time]{background:var(--bg);text-align:center;text-align-last:center}
+.itf select{padding-right:34px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='18' viewBox='0 0 12 18'%3E%3Cpath d='M2 7l4-4 4 4M2 11l4 4 4-4' fill='none' stroke='%236b8279' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+.itf input[type=time]::-webkit-date-and-time-value{text-align:center;margin:0}
 .itf textarea{min-height:52px;resize:none}
 .itf .submit{display:block;width:100%;margin-top:22px;padding:15px;border:0;border-radius:16px;background:#16283f;color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
 .itf .delbtn{display:block;width:100%;margin-top:6px;padding:12px;border:0;background:none;color:var(--bad);font:inherit}
 .itf .datebox{margin:6px 0 0}
 .cpill{display:inline-block;margin-right:8px;padding:1px 10px;border-radius:10px;font-size:.78rem;font-weight:700;vertical-align:middle}
 .cp-交通{background:#dfe9fb;color:#2d56b3}.cp-景點{background:#dcf1e3;color:#2f7a4a}.cp-美食{background:#fde7d2;color:#b4601c}.cp-購物{background:#f6dcec;color:#a23d7d}
-.tl .cbar{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
-.tl .cbar .nav{flex:1;min-width:0;font-weight:700;font-size:.92rem;color:var(--bad);text-decoration:none;white-space:nowrap}
+.tl .cbar{display:flex;align-items:center;gap:5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.tl .cbar .nav{flex:1;min-width:0;font-weight:700;font-size:.69rem;color:var(--bad);text-decoration:none;white-space:nowrap}
 .tl .cbar .nav.off{color:var(--mute);font-weight:400}
-.tl .cbar button{flex:0 0 auto;width:34px;height:34px;padding:0;border:0;border-radius:10px;background:var(--bg);color:var(--ink);font-size:1rem;line-height:1}
+.tl .cbar button{flex:0 0 auto;width:26px;height:26px;padding:0;border:0;border-radius:8px;background:var(--bg);color:var(--ink);font-size:.75rem;line-height:1}
 .tl .cbar button:disabled{opacity:.3}
 .tl .cbar button.rm{color:var(--bad)}
 @media (prefers-color-scheme:dark){.itf .submit{background:#3a86b8}.cp-交通{background:#233a63;color:#a9c4f5}.cp-景點{background:#1f4630;color:#9fdcb3}.cp-美食{background:#5a3a1c;color:#f5c99a}.cp-購物{background:#552a46;color:#f1b4d9}}
@@ -642,7 +646,7 @@ function prevOf(id) {
 const ancHtml = a => `<li class="it anc"><div class="tm">${esc(a.tm || '')}</div><span class="ln"><i></i></span><div class="card ${a.none ? 'dim' : ''}" ${a.home ? `data-edit="tw_trips:${esc(TRIP)}"` : 'data-tab="trip"'}><strong>${a.icon} ${esc(a.name)}</strong>${a.sub ? `<div class="sub">${esc(a.sub)}</div>` : a.home ? '<div class="sub">點此設定家裡地址</div>' : ''}</div></li>`;
 const itemHtml = (r, i, n) => {
   const dur = r.duration, h = dur ? Math.min(180, Math.round(dur / 60 * 40)) : 0, e = endMin(r), q = rawPlace(r);
-  const nav = q ? `<a class="nav" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}">➤ Google Maps 導航</a>` : `<span class="nav off">尚未填地點</span>`;
+  const nav = q ? `<a class="nav" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}">➤ 導航</a>` : `<span class="nav off">無地點</span>`;
   return `<li class="it" data-edit="itinerary:${r.id}"><div class="tm">${esc(r.time || '')}${e != null ? `<small>${fromMin(e)}</small>` : ''}</div><span class="ln"><i></i></span>
     <div class="card" style="min-height:${h}px"><div>${r.category ? `<span class="cpill cp-${esc(r.category)}">${esc(r.category)}</span>` : ''}<strong>${esc(r.title)}</strong>${dur ? `<span class="dur">${fmtMins(dur)}</span>` : ''}</div>${r.place && r.place !== r.title ? `<div class="sub">${esc(r.place)}</div>` : ''}${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}
     <div class="cbar">${nav}<button type="button" data-mv="${r.id}" data-dir="-1" aria-label="上移" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" data-mv="${r.id}" data-dir="1" aria-label="下移" ${i === n - 1 ? 'disabled' : ''}>↓</button><button type="button" class="rm" data-rmit="${r.id}" aria-label="刪除">🗑</button></div></div></li>`;
@@ -789,13 +793,20 @@ const getJSON = async (u, ms = 0) => {
   const c = new AbortController(), id = ms ? setTimeout(() => c.abort(), ms) : 0;
   try { const r = await fetch(u, { signal: c.signal }); if (!r.ok) throw new Error(r.status); return await r.json(); } finally { clearTimeout(id); }
 };
-const wxCache = k => { try { return JSON.parse(localStorage.getItem('tw:wx2:' + k) || 'null'); } catch (e) { return null; } };
+const wxCache = k => { try { return JSON.parse(localStorage.getItem('tw:wx3:' + k) || 'null'); } catch (e) { return null; } };
 async function geoCity(name) {
-  const k = 'tw:geoc2:' + name, c = localStorage.getItem(k); if (c) return JSON.parse(c);
-  const q = encodeURIComponent(name);
-  const om = getJSON('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name=' + q, 5000).then(j => { const r = j.results?.[0]; if (!r) throw 0; return { lat: r.latitude, lon: r.longitude }; });
-  const nm = getJSON('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh-TW&q=' + q, 6000).then(j => { if (!j[0]) throw 0; return { lat: +j[0].lat, lon: +j[0].lon }; });
-  let v = null; try { v = await Promise.any([om, nm]); } catch (e) {}      // 兩個地名服務同時查，誰先回來用誰
+  const k = 'tw:geoc3:' + name, c = localStorage.getItem(k); if (c) return JSON.parse(c);
+  const q = encodeURIComponent(name), cjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(name);
+  const om = getJSON('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name=' + q, 5000).then(j => { const r = j.results?.[0]; if (!r) throw 0; return { lat: r.latitude, lon: r.longitude, label: [r.name, r.admin1, r.country].filter(Boolean).join('、') }; });
+  const nm = getJSON('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh-TW&q=' + q, 6000).then(j => {
+    if (!j[0]) throw 0;
+    const ps = String(j[0].display_name || '').split(',').map(x => x.trim()).filter(x => x && !/^\d[\d-]*$/.test(x));
+    const lb = ps.length > 2 ? [ps[0], ps[ps.length - 2], ps[ps.length - 1]] : ps;
+    return { lat: +j[0].lat, lon: +j[0].lon, label: lb.join('、') };
+  });
+  om.catch(() => {}); nm.catch(() => {});
+  let v = null;
+  try { v = cjk ? await nm.catch(() => om) : await Promise.any([om, nm]); } catch (e) {}   // 中文地名以 OpenStreetMap 為準（較準），英文兩邊搶快
   if (v) localStorage.setItem(k, JSON.stringify(v));
   return v;
 }
@@ -803,24 +814,24 @@ async function fetchWeather(key) {
   const g = key[0] === '@' ? (([lat, lon]) => ({ lat, lon }))(key.slice(1).split(',').map(Number)) : await geoCity(key);
   if (!g) throw new Error('nogeo');
   const j = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${g.lat}&longitude=${g.lon}&timezone=auto&forecast_days=16&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max`, 10000);
-  const data = { now: j.current ? { temp: j.current.temperature_2m, code: j.current.weather_code } : null,
+  const data = { label: g.label || '', now: j.current ? { temp: j.current.temperature_2m, code: j.current.weather_code } : null,
     rows: j.daily.time.map((d, i) => ({ d, code: j.daily.weather_code[i], hi: j.daily.temperature_2m_max[i], lo: j.daily.temperature_2m_min[i], pop: j.daily.precipitation_probability_max[i] })) };
-  try { localStorage.setItem('tw:wx2:' + key, JSON.stringify({ t: Date.now(), data })); } catch (e) {}
+  try { localStorage.setItem('tw:wx3:' + key, JSON.stringify({ t: Date.now(), data })); } catch (e) {}
   return data;
 }
 async function ensureWeather() {
   const t = curTrip(), key = wxKey(t);
   if (!key || wx.key === key || wx.loading) return;
   const c = wxCache(key), fresh = c && Date.now() - c.t < 3600e3;      // 有舊資料就先顯示，背景再更新
-  wx = c ? { key, rows: c.data.rows, now: c.data.now, msg: fresh ? '' : '更新中…', loading: !fresh }
+  wx = c ? { key, rows: c.data.rows, now: c.data.now, label: c.data.label, msg: fresh ? '' : '更新中…', loading: !fresh }
          : { key, rows: [], now: null, msg: '天氣載入中…', loading: true };
   render(); if (fresh) return;
   try {
     const d = await fetchWeather(key);
     if (key !== wxKey(curTrip())) { wx = { key: '', rows: [], now: null, msg: '', loading: false }; return render(); }
-    wx = { key, rows: d.rows, now: d.now, msg: '', loading: false };
+    wx = { key, rows: d.rows, now: d.now, label: d.label, msg: '', loading: false };
   } catch (e) {
-    wx = { key, rows: c?.data.rows || [], now: c?.data.now || null, msg: e.message === 'nogeo' ? '找不到這個地點，請換個名稱試試（城市名或知名地標）' : '天氣暫時無法取得' + (c ? '，顯示上次的資料' : ''), loading: false };
+    wx = { key, rows: c?.data.rows || [], now: c?.data.now || null, label: c?.data.label, msg: e.message === 'nogeo' ? '找不到這個地點，請換個名稱試試（城市名或知名地標）' : '天氣暫時無法取得' + (c ? '，顯示上次的資料' : ''), loading: false };
   }
   render();
 }
@@ -898,6 +909,7 @@ const views = {
     let b = ((!place && !live) || wxEdit) ? `<div class="wxset"><input id="wxplace" placeholder="輸入地點，例如：札幌、Sapporo" value="${esc(place || t?.weather_place || '')}"><button class="mini" data-wxsave>查詢</button><button class="mini" data-wxlive>📍 即時位置</button></div>`
       : `<div class="wxbar"><span class="sub">📍 ${live ? esc(wxLive.name || '目前位置') + '（即時位置）' : esc(place)}</span><button class="mini" data-wxedit>更改地點</button><button class="mini" data-wxlive>📍 即時位置</button>${live && t?.weather_place ? '<button class="mini" data-wxback>回旅程地點</button>' : ''}</div>`;
     if ((place || live) && ok) {
+      if (!live && wx.label) b += `<div class="sub">定位到：${esc(wx.label)}（不對的話請換更明確的名稱，例如加上國家）</div>`;
       if (wx.msg) b += `<div class="sub">${esc(wx.msg)}</div>`;
       if (wx.now) b += `<div class="wxnow">${WX(wx.now.code)} <b>現在 ${Math.round(wx.now.temp)}°</b></div>`;
       if (wx.rows.length) {

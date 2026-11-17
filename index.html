@@ -178,6 +178,29 @@ textarea{min-height:80px}
 .btns button{flex:1;padding:10px;border-radius:999px;border:1px solid var(--line);background:none;color:var(--ink);font:inherit}
 .btns .go{background:var(--leaf);border-color:var(--leaf);color:#fff;font-weight:700}
 .btns .del{color:var(--bad)}
+
+/* 行程表單（底部抽屜）與卡片 */
+dialog:has(.itf){width:100%;max-width:none;margin:auto 0 0;border-radius:26px 26px 0 0;max-height:92vh;padding:20px 20px calc(22px + env(safe-area-inset-bottom,0px))}
+.itf .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.itf h3{margin:0;font:800 1.45rem var(--serif);color:var(--ink)}
+.itf .xb{width:34px;height:34px;padding:0;border:0;border-radius:50%;background:var(--bg);color:var(--mute);font-size:1.05rem;line-height:1}
+.itf .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.itf label{margin:16px 0 6px;font-weight:700;font-size:.95rem;color:var(--ink)}
+.itf input,.itf select,.itf textarea{padding:13px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-size:1.05rem}
+.itf input[type=time]{background:var(--bg);text-align:center;min-height:50px}
+.itf textarea{min-height:52px;resize:none}
+.itf .submit{display:block;width:100%;margin-top:22px;padding:15px;border:0;border-radius:16px;background:#16283f;color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
+.itf .delbtn{display:block;width:100%;margin-top:6px;padding:12px;border:0;background:none;color:var(--bad);font:inherit}
+.itf .datebox{margin:6px 0 0}
+.cpill{display:inline-block;margin-right:8px;padding:1px 10px;border-radius:10px;font-size:.78rem;font-weight:700;vertical-align:middle}
+.cp-交通{background:#dfe9fb;color:#2d56b3}.cp-景點{background:#dcf1e3;color:#2f7a4a}.cp-美食{background:#fde7d2;color:#b4601c}.cp-購物{background:#f6dcec;color:#a23d7d}
+.tl .cbar{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.tl .cbar .nav{flex:1;min-width:0;font-weight:700;font-size:.92rem;color:var(--bad);text-decoration:none;white-space:nowrap}
+.tl .cbar .nav.off{color:var(--mute);font-weight:400}
+.tl .cbar button{flex:0 0 auto;width:34px;height:34px;padding:0;border:0;border-radius:10px;background:var(--bg);color:var(--ink);font-size:1rem;line-height:1}
+.tl .cbar button:disabled{opacity:.3}
+.tl .cbar button.rm{color:var(--bad)}
+@media (prefers-color-scheme:dark){.itf .submit{background:#3a86b8}.cp-交通{background:#233a63;color:#a9c4f5}.cp-景點{background:#1f4630;color:#9fdcb3}.cp-美食{background:#5a3a1c;color:#f5c99a}.cp-購物{background:#552a46;color:#f1b4d9}}
 #toast{position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:.9rem;display:none;z-index:20}
 </style>
 </head>
@@ -306,7 +329,7 @@ async function subscribe() {
 /* ===== 表單 ===== */
 const FORMS = {
   tw_trips:  { title: '旅程', fields: [['name','text','旅程名稱（例如：東京五日）'],['start_day','date','出發日'],['end_day','date','回程日'],['home_address','text','家裡地址（選填，當作行程的起點與終點）']] },
-  itinerary: { title: '行程', fields: [['day','date','日期'],['time','time','開始時間'],['end_time','time','結束時間'],['duration','number','活動總時間（分鐘）'],['title','text','活動'],['place','text','地點'],['note','textarea','備註']] },
+  itinerary: { title: '行程', fields: [['day','date','日期'],['time','time','預計時間'],['title','text','地點名稱'],['place','text','地點'],['note','textarea','備註']] },
   flights:   { title: '航班', fields: [['dep_airport','text','出發機場'],['arr_airport','text','抵達機場'],['dep_time','datetime-local','起飛時間（當地）'],['arr_time','datetime-local','抵達時間（當地）'],['booking_ref','text','訂位代號'],['note','textarea','備註（行李、座位…）']] },
   lodging:   { title: '住宿', fields: [['name','text','住宿名稱'],['address','text','地址'],['check_in','date','入住日'],['check_out','date','退房日'],['booking_ref','text','訂房編號'],['url','url','訂房或地圖連結'],['note','textarea','備註（入住時間、設備…）']] },
   info:      { title: '資訊', fields: [['category','text','分類（可自行輸入）'],['title','text','標題'],['content','textarea','內容']] },
@@ -349,7 +372,9 @@ function openForm(t, id, extra = {}) {
   if (t === 'expenses' && !state.members.length) return toast('請先到「成員」新增成員');
   const row = id ? (t === 'tw_trips' ? trips : state[t]).find(r => r.id === id) : (t === 'itinerary' ? { day: selDay || curTrip()?.start_day } : t === 'flights' ? { flight_date: extra.leg === 'in' ? curTrip()?.end_day : curTrip()?.start_day } : t === 'restaurants' ? { cat_id: extra.cat_id } : {});
   cur = { t, id, extra, newId: id || (t === 'tw_trips' ? shortId() : crypto.randomUUID()) };
-  $('#frm').innerHTML = `<h3 style="margin:0;font-family:var(--serif);font-size:1.1rem;color:var(--ink)">${id ? '編輯' : '新增'}${FORMS[t].title}</h3>${formHtml(t, row)}
+  $('#frm').innerHTML = t === 'itinerary'
+    ? `<div class="itf"><div class="hd"><h3>${id ? '編輯行程景點' : '新增行程景點'}</h3><button type="button" class="xb" id="cancel" aria-label="關閉">✕</button></div>${formHtml(t, row)}<button class="submit">${id ? '儲存變更' : '加入行程表'}</button>${id ? '<button type="button" class="delbtn" id="del">刪除這個行程</button>' : ''}</div>`
+    : `<h3 style="margin:0;font-family:var(--serif);font-size:1.1rem;color:var(--ink)">${id ? '編輯' : '新增'}${FORMS[t].title}</h3>${formHtml(t, row)}
     <div class="btns">${id ? '<button type="button" class="del" id="del">刪除</button>' : ''}<button type="button" id="cancel">取消</button><button class="go">儲存</button></div>`;
   $('#cancel').onclick = () => $('#dlg').close();
   if ($('#del')) $('#del').onclick = async () => { if (confirm(t === 'tw_trips' ? '刪除旅程會連同所有行程、資訊與帳務一起刪除，確定嗎？' : '確定刪除？')) { await delRow(t, id); $('#dlg').close(); if (t === 'tw_trips' && id === TRIP) location.href = location.pathname; } };
@@ -368,11 +393,12 @@ $('#frm').onsubmit = async e => {
   if (cur.t === 'tw_trips' && row.start_day && row.end_day && row.end_day < row.start_day) return toast('回程日不能早於出發日');
   if (cur.t === 'expenses') { row.payers = fd.getAll('payers'); if (!row.payers.length) return toast('請至少選擇一位付款人'); row.payer = row.payers[0]; row.split = fd.getAll('split'); row.amount = +row.amount; row.rate = +row.rate || 1; }
   if (cur.t === 'itinerary') {
-    const s0 = toMin(row.time), e0 = toMin(row.end_time); let d0 = row.duration == null || row.duration === '' ? null : Math.round(+row.duration);
-    if (s0 != null && e0 != null) { if (e0 < s0) return toast('結束時間不能早於開始時間'); d0 = e0 - s0; }
-    else if (s0 != null && d0 != null) row.end_time = fromMin(Math.min(s0 + d0, 1439));
-    else if (e0 != null && d0 != null) row.time = fromMin(Math.max(e0 - d0, 0));
-    row.duration = d0;
+    row.title = (row.title || '').trim();
+    row.place = vals.place !== undefined ? (vals.place || row.title) : row.title;     // 地點名稱同時用於地圖搜尋
+    row.category = row.category || '景點';
+    const s0 = toMin(row.time), d0 = row.duration ? Math.round(+row.duration) : null;   // 舊資料若有總時間，結束時間跟著開始時間更新
+    row.duration = d0; row.end_time = d0 ? (s0 != null ? fromMin(Math.min(s0 + d0, 1439)) : row.end_time ?? null) : null;
+    if (!existing || existing.day !== row.day) row.sort_order = newSort(row);
   }
   row.id = cur.newId;                                  // 同一張表單永遠同一個 id
   saving = true; if (e.submitter) e.submitter.disabled = true;
@@ -527,17 +553,6 @@ async function resolveMap(u) {
   } catch (e) { return null; }
 }
 function wireForm(t) {
-  if (t === 'itinerary') {
-    const S = $('[name=time]'), E = $('[name=end_time]'), D = $('[name=duration]'); let ed = [];
-    const upd = f => {
-      ed = [f, ...ed.filter(x => x !== f)].slice(0, 2); if (ed.length < 2) return;
-      const third = ['s', 'e', 'd'].find(x => !ed.includes(x)), s0 = toMin(S.value), e0 = toMin(E.value), d0 = D.value === '' ? null : +D.value;
-      if (third === 'd' && s0 != null && e0 != null) D.value = e0 >= s0 ? e0 - s0 : '';
-      if (third === 'e' && s0 != null && d0 != null) E.value = fromMin(Math.min(s0 + d0, 1439));
-      if (third === 's' && e0 != null && d0 != null) S.value = fromMin(Math.max(e0 - d0, 0));
-    };
-    [[S, 's'], [E, 'e'], [D, 'd']].forEach(([el, k]) => { el.addEventListener('input', () => upd(k)); el.addEventListener('change', () => upd(k)); });
-  }
   if (t === 'restaurants') {
     const u = $('[name=map_url]'), n = $('[name=name]');
     const go = async () => {
@@ -577,7 +592,33 @@ const fmtMins = m => m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ' ' + (m 
 const toMin = v => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? +m[1] * 60 + +m[2] : null; };
 const fromMin = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
 const shiftDay = (d, n) => { const x = new Date(d + 'T00:00'); x.setDate(x.getDate() + n); return ymd(x); };
-const dayRows = () => state.itinerary.filter(r => (r.day || '') === selDay).sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+const dayRows = () => {                         // 全部有排序值＝手動排序；否則依開始時間排
+  const rows = state.itinerary.filter(r => (r.day || '') === selDay), manual = rows.length && rows.every(r => r.sort_order != null);
+  return rows.sort(manual ? (a, b) => a.sort_order - b.sort_order : (a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+};
+function newSort(row) {                        // 新行程依時間插進手動排序的位置；舊的依時間排序日維持不動
+  const rows = state.itinerary.filter(r => (r.day || '') === (row.day || '') && r.id !== row.id);
+  if (!rows.length || !rows.every(r => r.sort_order != null)) return null;
+  rows.sort((a, b) => a.sort_order - b.sort_order);
+  const t = toMin(row.time), i = t == null ? -1 : rows.findIndex(r => toMin(r.time) != null && toMin(r.time) > t);
+  if (i < 0) return rows[rows.length - 1].sort_order + 1;
+  return i === 0 ? rows[0].sort_order - 1 : (rows[i - 1].sort_order + rows[i].sort_order) / 2;
+}
+async function moveIt(id, dir) {
+  if (!canEdit()) return toast('離線中，目前只能查看');
+  if (saving) return;
+  const rows = dayRows(), i = rows.findIndex(r => r.id === id), j = i + dir;
+  if (i < 0 || j < 0 || j >= rows.length) return;
+  saving = true;
+  try {
+    const vals = rows.every(r => r.sort_order != null) ? rows.map(r => r.sort_order) : rows.map((_, k) => k);
+    const order = rows.slice(); [order[i], order[j]] = [order[j], order[i]];
+    const ups = [];
+    order.forEach((r, k) => { if (r.sort_order !== vals[k]) { r.sort_order = vals[k]; ups.push({ ...r, trip_id: TRIP }); } });
+    persist(); render();
+    if (sb && ups.length) { const { error } = await sb.from('itinerary').upsert(ups); if (error) toast('儲存失敗：' + error.message); await loadAll(); }
+  } finally { saving = false; }
+}
 const endMin = r => toMin(r?.end_time) ?? (toMin(r?.time) != null && r?.duration ? toMin(r.time) + r.duration : null);
 const hotelFor = night => state.lodging.find(l => l.check_in && l.check_out && l.check_in <= night && night < l.check_out);
 const tripEnds = () => { const t = curTrip(), ds = tripDays(); return [t?.start_day || ds[0], t?.end_day || t?.start_day || ds[ds.length - 1]]; };
@@ -599,10 +640,12 @@ function prevOf(id) {
   const a = startAnchor(selDay); return a?.place ? { title: a.name, place: a.place } : null;
 }
 const ancHtml = a => `<li class="it anc"><div class="tm">${esc(a.tm || '')}</div><span class="ln"><i></i></span><div class="card ${a.none ? 'dim' : ''}" ${a.home ? `data-edit="tw_trips:${esc(TRIP)}"` : 'data-tab="trip"'}><strong>${a.icon} ${esc(a.name)}</strong>${a.sub ? `<div class="sub">${esc(a.sub)}</div>` : a.home ? '<div class="sub">點此設定家裡地址</div>' : ''}</div></li>`;
-const itemHtml = r => {
-  const dur = r.duration, h = dur ? Math.min(180, Math.round(dur / 60 * 40)) : 0, e = endMin(r);
+const itemHtml = (r, i, n) => {
+  const dur = r.duration, h = dur ? Math.min(180, Math.round(dur / 60 * 40)) : 0, e = endMin(r), q = rawPlace(r);
+  const nav = q ? `<a class="nav" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}">➤ Google Maps 導航</a>` : `<span class="nav off">尚未填地點</span>`;
   return `<li class="it" data-edit="itinerary:${r.id}"><div class="tm">${esc(r.time || '')}${e != null ? `<small>${fromMin(e)}</small>` : ''}</div><span class="ln"><i></i></span>
-    <div class="card" style="min-height:${h}px"><strong>${esc(r.title)}</strong>${dur ? `<span class="dur">${fmtMins(dur)}</span>` : ''}${r.place ? `<div class="sub">${esc(r.place)}</div>` : ''}${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}</div></li>`;
+    <div class="card" style="min-height:${h}px"><div>${r.category ? `<span class="cpill cp-${esc(r.category)}">${esc(r.category)}</span>` : ''}<strong>${esc(r.title)}</strong>${dur ? `<span class="dur">${fmtMins(dur)}</span>` : ''}</div>${r.place && r.place !== r.title ? `<div class="sub">${esc(r.place)}</div>` : ''}${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}
+    <div class="cbar">${nav}<button type="button" data-mv="${r.id}" data-dir="-1" aria-label="上移" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" data-mv="${r.id}" data-dir="1" aria-label="下移" ${i === n - 1 ? 'disabled' : ''}>↓</button><button type="button" class="rm" data-rmit="${r.id}" aria-label="刪除">🗑</button></div></div></li>`;
 };
 const gapHtml = px => px > 0 ? `<li class="gap" style="height:${px}px"><span></span><span class="ln"></span><span></span></li>` : '';
 const rawPlace = r => r?.place || r?.title || '';          // 使用者填寫的原文（Google 地圖連結用）
@@ -675,10 +718,15 @@ async function saveLeg(id) {
     if (files.length) { toast('附件上傳中…'); await uploadFiles('transport', id, files); await loadAll(); toast('附件已上傳'); }
   } finally { saving = false; }
 }
+const IT_CATS = ['交通', '景點', '美食', '購物'];
 const itineraryForm = row => {
-  const F = Object.fromEntries(FORMS.itinerary.fields.map(f => [f[0], f])), g = k => fieldHtml(F[k], row[k]);
-  return `<details class="datebox"><summary>日期：${row.day ? fmtDay(row.day) : '未排日期'}　<span>更改</span></summary><label>日期</label><input name="day" type="date" value="${esc(row.day || '')}"></details>` +
-    g('time') + g('end_time') + g('duration') + `<div class="sub">開始、結束、總時間填其中兩項，第三項會自動算出來。</div>` + g('title') + g('place') + g('note');
+  const t0 = row.time ?? (cur?.id ? '' : '10:00'), cat = IT_CATS.includes(row.category) ? row.category : '景點';
+  return `<details class="datebox"><summary>日期：${row.day ? fmtDay(row.day) : '未排日期'}　<span>更改</span></summary><label>日期</label><input name="day" type="date" value="${esc(row.day || '')}"></details>
+    <div class="two"><div><label>預計時間</label><input name="time" type="time" value="${esc(t0)}"></div>
+    <div><label>類別</label><select name="category">${IT_CATS.map(c => `<option ${c === cat ? 'selected' : ''}>${c}</option>`).join('')}</select></div></div>
+    <label>地點名稱 (用於地圖搜尋)</label><input name="title" required placeholder="例如：東京晴空塔" value="${esc(row.title)}">
+    ${row.place && row.place !== row.title ? `<label>地圖搜尋地點（選填，與名稱不同時填）</label><input name="place" value="${esc(row.place)}">` : ''}
+    <label>備註 / 必吃必買提醒</label><textarea name="note" rows="2" placeholder="例如：先去4樓買票、必吃抹茶冰">${esc(row.note)}</textarea>`;
 };
 const catSelect = cid => `<label>類別</label><select name="cat_id"><option value="">未分類</option>${state.check_cats.filter(c => c.kind === 'restaurants').map(c => `<option value="${c.id}" ${c.id === cid ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>`;
 
@@ -832,7 +880,7 @@ const views = {
       const prev = i ? rows[i - 1] : (sA?.place ? { title: sA.name, place: sA.place } : null);
       if (prev) h += legHtml(r, prev);
       if (i) { const pe = endMin(rows[i - 1]), st = toMin(r.time); if (pe != null && st != null && st > pe) h += gapHtml(Math.min(48, Math.round((st - pe) / 60 * 16))); }
-      h += itemHtml(r);
+      h += itemHtml(r, i, rows.length);
     });
     if (eA) h += ancHtml(eA);
     return `<div class="days">${chips}</div><h2>${fmtDay(selDay)}</h2>` + (h ? `<ul class="tl">${h}</ul>` : `<div class="empty small">這天還沒有安排，按右下角新增。</div>`) + (rows.length || !h ? '' : `<div class="empty small">按右下角新增第一個行程。</div>`) + add('itinerary');
@@ -962,7 +1010,7 @@ function render() {
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-test],[data-fold],[data-foldall],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-test],[data-fold],[data-foldall],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
   else if ('day' in el.dataset) { selDay = el.dataset.day; openLeg = null; render(); }
   else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
@@ -971,6 +1019,8 @@ document.addEventListener('click', e => {
   else if (el.dataset.trans) toggleLeg(el.dataset.trans);
   else if ('wxsave' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); const v = ($('#wxplace')?.value || '').trim(); if (!curTrip()) return toast('找不到這趟旅程'); wxEdit = false; wxLive = null; wx = { key: '', rows: [], now: null, msg: '', loading: false }; saveRow('tw_trips', { ...curTrip(), weather_place: v || null }); }
   else if ('join' in el.dataset) joinTrip();
+  else if ('mv' in el.dataset) moveIt(el.dataset.mv, +el.dataset.dir);
+  else if ('rmit' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); if (confirm('確定刪除這個行程？')) delRow('itinerary', el.dataset.rmit); }
   else if ('wxedit' in el.dataset) { wxEdit = true; render(); }
   else if ('wxlive' in el.dataset) wxUseLive();
   else if ('wxback' in el.dataset) { wxLive = null; wxEdit = false; wx = { key: '', rows: [], now: null, msg: '', loading: false }; render(); }

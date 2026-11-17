@@ -409,7 +409,6 @@ $('#frm').onsubmit = async e => {
   try {
     if (cur.variant === 'transport') {
       row.mins = row.mins ? Math.round(+row.mins) : null;
-      if (row.mode && !row.mins) { const est = await estimate(row.mode, placeOf(cur.prev), placeOf(row)); if (est.mins) row.mins = est.mins; }
     }
     if (cur.t === 'flights') {                          // 只填航班號與日期時，自動查詢起降資料
       row.flight_no = (row.flight_no || '').toUpperCase().replace(/\s+/g, '');
@@ -539,12 +538,21 @@ async function lookupFlight(no, date) {
   try { const { data, error } = await sb.functions.invoke('tw-api', { body: { action: 'flight', no, date } }); return error ? { error: 'fn' } : data; }
   catch (e) { return { error: 'fn' }; }
 }
+function cleanPlaceName(n) {                       // 只留店名：去掉「 · 地址」「- Google 地圖」與後面接的地址
+  n = String(n || '').replace(/\s*[-–|]\s*Google\s*(地圖|Maps).*$/i, '').trim();
+  n = n.split(/\s+[·‧•]\s+/)[0];
+  const adr = /[0-9０-９]|[市縣區鄉鎮村路街巷弄號丁目町都府県道]|street|st\.|road|rd\.|ave|japan|taiwan|日本|台灣|臺灣/i;
+  const cm = n.match(/[,，]\s*/);
+  if (cm && adr.test(n.slice(cm.index + cm[0].length))) n = n.slice(0, cm.index);
+  n = n.replace(/\s+(?=〒|\d{3}[-‐]\d{4}\b|\d{3}[-‐]?\d{0,4}\s*[\u4e00-\u9fff]|[\u4e00-\u9fff]{2,4}[都道府縣市][\u4e00-\u9fff]{1,6}[區市町村郡]).*$/, '');
+  return n.trim();
+}
 function mapName(u) {
   try {
     const x = new URL(u), m = x.pathname.match(/\/maps\/place\/([^/@]+)/);
-    if (m) return decodeURIComponent(m[1].replace(/\+/g, ' '));
+    if (m) return cleanPlaceName(decodeURIComponent(m[1].replace(/\+/g, ' ')));
     const q = x.searchParams.get('q') || x.searchParams.get('query');
-    if (q && !/^-?\d+(\.\d+)?,/.test(q)) return q;
+    if (q && !/^-?\d+(\.\d+)?,/.test(q)) return cleanPlaceName(q);
   } catch (e) {}
   return null;
 }
@@ -553,7 +561,7 @@ async function resolveMap(u) {
   if (!sb) return null;
   try {
     const { data } = await sb.functions.invoke('tw-api', { body: { action: 'map', url: u } });
-    return (data?.url && mapName(data.url)) || data?.title || null;
+    return (data?.url && mapName(data.url)) || cleanPlaceName(data?.title) || null;
   } catch (e) { return null; }
 }
 function wireForm(t) {
@@ -590,8 +598,6 @@ const PRESETS = { restaurants: ['早餐', '午餐', '晚餐', '咖啡甜點', '�
 
 /* ===== 行程之間的交通 ===== */
 const MODES = { walk: ['🚶', '步行'], transit: ['🚇', '電車地鐵'], bus: ['🚌', '巴士'], taxi: ['🚕', '計程車'], car: ['🚗', '開車'], bike: ['🚲', '腳踏車'], ferry: ['🚢', '船'], other: ['➜', '其他'] };
-const SPEED = { walk: [4.8, 1.25, 0], bike: [14, 1.3, 0], transit: [22, 1.3, 8], bus: [15, 1.3, 6], taxi: [28, 1.3, 3], car: [28, 1.3, 3], ferry: [20, 1.1, 10] };   // [km/h, 繞路係數, 等候分鐘]
-const GMODE = { walk: 'walking', bike: 'bicycling', taxi: 'driving', car: 'driving' };
 const fmtMins = m => m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ' ' + (m % 60) + ' 分' : ''}` : `${m} 分`;
 const toMin = v => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? +m[1] * 60 + +m[2] : null; };
 const fromMin = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
@@ -661,35 +667,12 @@ const legHtml = (r, prev) => {
   const warn = gap == null ? '' : gap < 0 ? '⚠ 與上一個行程的時間重疊' : (r.mins && gap < r.mins ? `⚠ 交通約 ${r.mins} 分，但中間只有 ${gap} 分` : '');
   return `<li class="leg ${m ? 'set' : ''}"><span></span><span class="ln"></span><div class="lc"><span class="pill" data-trans="${r.id}">${m ? m[0] + ' ' + m[1] + (r.mins ? ' · 約 ' + fmtMins(r.mins) : '') : '＋ 交通方式'}${r.trans_note ? ' 📝' : ''}${n ? ' 📎' + n : ''}</span>${warn ? `<div class="warn">${warn}</div>` : ''}${open ? legPanel(r) : ''}</div></li>`;
 };
-let geoNet = false;
-async function geocode(q) {
-  const k = 'tw:geo:' + q, c = localStorage.getItem(k); if (c) return JSON.parse(c);
-  const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh-TW&q=' + encodeURIComponent(q));
-  const j = await r.json(); geoNet = true;
-  if (!j[0]) return null;
-  const v = { lat: +j[0].lat, lon: +j[0].lon }; localStorage.setItem(k, JSON.stringify(v)); return v;
-}
-async function estimate(mode, from, to) {
-  const sp = SPEED[mode]; if (!sp) return { error: '這個交通方式請手動輸入時間' };
-  try {
-    geoNet = false; const a = await geocode(from);
-    if (geoNet) await new Promise(r => setTimeout(r, 1100));      // 地理編碼服務限制每秒 1 次
-    const b = await geocode(to);
-    if (!a || !b) return { error: '找不到地點位置，請在行程填入更明確的「地點」，或手動輸入時間' };
-    const rad = x => x * Math.PI / 180, dLa = rad(b.lat - a.lat), dLo = rad(b.lon - a.lon);
-    const h = Math.sin(dLa / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLo / 2) ** 2;
-    const km = 2 * 6371 * Math.asin(Math.sqrt(h));
-    return { mins: Math.max(5, Math.ceil((km * sp[1] / sp[0] * 60 + sp[2]) / 5) * 5), km };
-  } catch (e) { return { error: '目前無法估算（需要網路），請手動輸入時間' }; }
-}
 function legPanel(r) {
   const rows = dayRows(), prev = prevOf(r.id);
   const opts = Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === r.mode ? 'selected' : ''}>${v[0]} ${v[1]}</option>`).join('');
   return `<div class="lpanel" data-lp="${r.id}"><div class="sub">${esc(prev?.place || prev?.title || '')} → ${esc(r.place || r.title)}</div>
     <label>交通方式</label><select name="mode"><option value="">（不設定，移除交通）</option>${opts}</select>
     <label>預估時間（分鐘）</label><input name="mins" type="number" min="0" step="1" value="${esc(r.mins ?? '')}">
-    <div class="btns"><button type="button" data-test="${r.id}">自動估算</button></div>
-    <div class="sub" data-eststat>自動估算是依兩地直線距離粗估，實際時間請以 Google 地圖為準。</div>
     <p><a data-gmap target="_blank" rel="noopener" href="${gmapUrl(r.mode, rawPlace(prev), rawPlace(r))}">在 Google 地圖查詳細路線 ↗</a></p>
     <label>備註（班次、車資、停車場…）</label><textarea name="trans_note">${esc(r.trans_note)}</textarea>
     ${attHtml(r.id, 'transport', 't')}
@@ -700,15 +683,6 @@ function toggleLeg(id) {
   openLeg = openLeg === id ? null : id; render();
   $('.lpanel')?.scrollIntoView({ block: 'nearest' });
 }
-async function estLeg() {
-  const pn = $('.lpanel'); if (!pn) return;
-  const r = state.itinerary.find(x => x.id === pn.dataset.lp), mode = pn.querySelector('[name=mode]').value;
-  if (!mode) return toast('請先選交通方式');
-  const rows = dayRows(), prev = prevOf(r.id), st = pn.querySelector('[data-eststat]');
-  st.textContent = '估算中…';
-  const e = await estimate(mode, placeOf(prev), placeOf(r));
-  if (e.mins) { pn.querySelector('[name=mins]').value = e.mins; st.textContent = `粗估約 ${fmtMins(e.mins)}（直線 ${e.km.toFixed(1)} 公里），實際請以 Google 地圖為準`; } else st.textContent = e.error;
-}
 async function saveLeg(id) {
   const pn = $('.lpanel'), r = state.itinerary.find(x => x.id === id); if (!pn || !r || saving) return;
   saving = true;
@@ -716,7 +690,6 @@ async function saveLeg(id) {
     const mode = pn.querySelector('[name=mode]').value || null, m0 = pn.querySelector('[name=mins]').value;
     const row = { ...r, mode, mins: mode && m0 ? Math.round(+m0) : null, trans_note: pn.querySelector('[name=trans_note]').value.trim() || null };
     const files = [...(pn.querySelector('#tfiles')?.files || [])];
-    if (mode && !row.mins) { const rows = dayRows(), prev = prevOf(id), e = await estimate(mode, placeOf(prev), placeOf(row)); if (e.mins) row.mins = e.mins; }
     openLeg = null;
     await saveRow('itinerary', row);
     if (files.length) { toast('附件上傳中…'); await uploadFiles('transport', id, files); await loadAll(); toast('附件已上傳'); }
@@ -1022,7 +995,7 @@ function render() {
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-test],[data-fold],[data-foldall],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-fold],[data-foldall],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
   else if ('day' in el.dataset) { selDay = el.dataset.day; openLeg = null; render(); }
   else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
@@ -1039,7 +1012,6 @@ document.addEventListener('click', e => {
   else if ('catpick' in el.dataset) { const i = $('[name=category]'); if (i) i.value = el.dataset.catpick; }
   else if ('tsave' in el.dataset) saveLeg(el.dataset.tsave);
   else if ('tcancel' in el.dataset) { openLeg = null; render(); }
-  else if ('test' in el.dataset) estLeg();
   else if (el.dataset.fold) { const k = el.dataset.fold; folded.has(k) ? folded.delete(k) : folded.add(k); foldSave(); render(); }
   else if (el.dataset.foldall) { const ids = el.dataset.foldall.split(','), anyOpen = ids.some(i => !folded.has(i)); ids.forEach(i => anyOpen ? folded.add(i) : folded.delete(i)); foldSave(); render(); }
   else if (el.dataset.tab) { tab = el.dataset.tab; openLeg = null; fresh = true; render(); scrollTo(0, 0); }

@@ -205,6 +205,20 @@ dialog:has(.itf){width:100%;max-width:none;margin:auto 0 0;border-radius:26px 26
 .tl .cbar button:disabled{opacity:.3}
 .tl .cbar button.rm{color:var(--bad)}
 @media (prefers-color-scheme:dark){.itf .submit{background:#3a86b8}.cp-交通{background:#233a63;color:#a9c4f5}.cp-景點{background:#1f4630;color:#9fdcb3}.cp-美食{background:#5a3a1c;color:#f5c99a}.cp-購物{background:#552a46;color:#f1b4d9}}
+
+/* 憑證 QR */
+.vcard{display:flex;align-items:center;gap:12px}
+.vcard .vi{flex:0 0 auto;width:54px;height:54px;border-radius:10px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:1.6rem;overflow:hidden}
+.vcard .vi img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.vcard .vt{flex:1;min-width:0}
+.vcard .vbtn{flex:0 0 auto;padding:10px 14px;border:0;border-radius:12px;background:#16283f;color:#fff;font:inherit;font-weight:700;font-size:.9rem}
+@media (prefers-color-scheme:dark){.vcard .vbtn{background:#3a86b8}}
+#qrov{position:fixed;inset:0;z-index:2000;background:#fff;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:calc(24px + env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px));text-align:center}
+#qrov h2{margin:0;font-size:1.25rem;color:#111}
+#qrov img.qrbig{width:min(90vw,62vh);height:auto;background:#fff;image-rendering:pixelated}
+#qrov img.orig{max-width:94vw;max-height:66vh;object-fit:contain}
+#qrov .hint{font-size:.8rem;color:#666}
+#qrov button{padding:14px 40px;border:0;border-radius:16px;background:#16283f;color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
 #toast{position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:.9rem;display:none;z-index:20}
 </style>
 </head>
@@ -332,7 +346,7 @@ async function subscribe() {
 
 /* ===== 表單 ===== */
 const FORMS = {
-  tw_trips:  { title: '旅程', fields: [['name','text','旅程名稱（例如：東京五日）'],['start_day','date','出發日'],['end_day','date','回程日'],['home_address','text','家裡地址（選填，當作行程的起點與終點）']] },
+  tw_trips:  { title: '旅程', fields: [['name','text','旅程名稱（例如：東京五日）'],['start_day','date','出發日'],['end_day','date','回程日']] },
   itinerary: { title: '行程', fields: [['day','date','日期'],['time','time','預計時間'],['title','text','地點名稱'],['place','text','地點'],['note','textarea','備註']] },
   flights:   { title: '航班', fields: [['dep_airport','text','出發機場'],['arr_airport','text','抵達機場'],['dep_time','datetime-local','起飛時間（當地）'],['arr_time','datetime-local','抵達時間（當地）'],['booking_ref','text','訂位代號'],['note','textarea','備註（行李、座位…）']] },
   lodging:   { title: '住宿', fields: [['name','text','住宿名稱'],['address','text','地址'],['check_in','date','入住日'],['check_out','date','退房日'],['booking_ref','text','訂房編號'],['url','url','訂房或地圖連結'],['note','textarea','備註（入住時間、設備…）']] },
@@ -415,7 +429,7 @@ $('#frm').onsubmit = async e => {
       if (!row.dep_airport || !row.arr_airport) {
         if (e.submitter) e.submitter.textContent = '查詢中…';
         const r = await lookupFlight(row.flight_no, row.flight_date);
-        if (r && !r.error) { for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) row[k] = r[k] || row[k]; }
+        if (r && !r.error) { for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) row[k] = r[k] || row[k]; if (r.options?.length > 1) toast('這天查到 ' + r.options.length + ' 筆航班資料，已帶入最符合的一筆，請確認'); }
         else toast(flightMsg(r?.error, r?.detail));
       }
       row.dep_airport = apZh(row.dep_airport); row.arr_airport = apZh(row.arr_airport);
@@ -532,10 +546,17 @@ const apZh = v => {                                   // 機場代碼 → 中文
   return c && AIRPORTS[c] ? `${AIRPORTS[c]}（${c}）` : s;
 };
 const flightMsg = (err, detail) => ({ no_key: '尚未設定航班查詢金鑰，請手動填入起降資訊', not_found: '查不到這個航班，請確認編號與日期，或手動填入', local: '本機模式無法自動查詢，請手動填入', bad_input: '航班編號或日期格式不對', fn: '查詢功能沒有回應，請手動填入' }[err] || `航班查詢失敗（${err || '未知'}${detail ? '：' + String(detail).slice(0, 80) : ''}），請手動填入`);
+const iataOf = v => (String(v || '').match(/[（(]([A-Z]{3})[)）]/) || String(v || '').match(/\b([A-Z]{3})\b/) || [])[1] || '';
+function flightHint() {                              // 回程航班：優先選「從去程抵達機場起飛」的那一筆
+  const leg = cur?.extra?.leg || state.flights.find(f => f.id === cur?.id)?.leg || 'out';
+  if (leg !== 'in') return '';
+  const outs = state.flights.filter(f => (f.leg || 'out') === 'out' && f.arr_airport).sort((a, b) => (a.dep_time || a.flight_date || '').localeCompare(b.dep_time || b.flight_date || ''));
+  return iataOf(outs[outs.length - 1]?.arr_airport);
+}
 async function lookupFlight(no, date) {
   if (!sb) return { error: 'local' };
   if (!no || !date) return { error: 'bad_input' };
-  try { const { data, error } = await sb.functions.invoke('tw-api', { body: { action: 'flight', no, date } }); return error ? { error: 'fn' } : data; }
+  try { const { data, error } = await sb.functions.invoke('tw-api', { body: { action: 'flight', no, date, from: flightHint() } }); return error ? { error: 'fn' } : data; }
   catch (e) { return { error: 'fn' }; }
 }
 function cleanPlaceName(n) {                       // 只留店名：去掉「 · 地址」「- Google 地圖」與後面接的地址
@@ -583,7 +604,13 @@ function wireForm(t) {
     const r = await lookupFlight(no, d);
     if (r && !r.error) {
       for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) $(`[name=${k}]`).value = /airport/.test(k) ? apZh(r[k] || '') : (r[k] || '');
+      const fill = o => { for (const k of ['dep_airport', 'arr_airport', 'dep_time', 'arr_time']) $(`[name=${k}]`).value = /airport/.test(k) ? apZh(o[k] || '') : (o[k] || ''); };
       $('#lkst').textContent = '已帶入' + (r.airline ? '（' + r.airline + '）' : ''); $('details').open = true;
+      if (r.options?.length > 1) {                    // 同一天有多筆資料（多段航程等）：讓使用者自己選
+        const lab = o => `${(o.dep_airport || '').split(' ')[0]}→${(o.arr_airport || '').split(' ')[0]} ${(o.dep_time || '').slice(11, 16)}`;
+        $('#lkst').innerHTML = `這天有 ${r.options.length} 筆，請選擇：` + r.options.map((o, i) => `<button type="button" class="mini" data-fopt="${i}">${esc(lab(o))}</button>`).join(' ');
+        $('#lkst').querySelectorAll('[data-fopt]').forEach(b => b.onclick = () => { fill(r.options[+b.dataset.fopt]); $('#lkst').textContent = '已帶入 ' + lab(r.options[+b.dataset.fopt]); });
+      }
     } else $('#lkst').textContent = flightMsg(r?.error, r?.detail);
   };
 }
@@ -593,6 +620,114 @@ async function addPreset(kind) {
   state.check_cats.push(...rows); persist(); render();
   if (sb) { const { error } = await sb.from('check_cats').insert(rows.map(r => ({ ...r, trip_id: TRIP }))); if (error) toast('新增失敗：' + error.message); await loadAll(); }
 }
+/* ===== 憑證：掃描 QR Code、重新產生清晰圖、全螢幕出示 ===== */
+const LIBS = {
+  jsqr: [() => window.jsQR, ['https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js']],
+  qrgen: [() => window.qrcode, ['https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js', 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js']],
+  pdf: [() => window.pdfjsLib, ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js']]
+};
+const libP = {};
+function needLib(k) {
+  const [ok, urls] = LIBS[k]; if (ok()) return Promise.resolve();
+  return libP[k] ||= new Promise((res, rej) => {
+    const q = [...urls], next = () => {
+      const u = q.shift(); if (!u) { libP[k] = null; return rej(new Error('lib ' + k)); }
+      const el = document.createElement('script'); el.src = u; el.onload = res; el.onerror = () => { el.remove(); next(); }; document.head.appendChild(el);
+    }; next();
+  });
+}
+const tick = () => new Promise(r => setTimeout(r, 0));
+async function qrFromCanvas(src) {                    // 多種縮放＋切塊，文件裡的小 QR 也找得到
+  const run = (sx, sy, sw, sh, max) => {
+    const k = Math.min(1, max / Math.max(sw, sh)), w = Math.max(1, Math.round(sw * k)), h = Math.max(1, Math.round(sh * k));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
+    const r = jsQR(x.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'attemptBoth' });
+    return r && r.data ? r.data : null;
+  };
+  const W = src.width, H = src.height;
+  for (const m of [1400, 900, 2200]) { const t = run(0, 0, W, H, m); if (t) return t; await tick(); }
+  for (const n of [2, 3]) {
+    const tw = W / n, th = H / n, ow = tw * .3, oh = th * .3;
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const x0 = Math.max(0, i * tw - ow), y0 = Math.max(0, j * th - oh), x1 = Math.min(W, (i + 1) * tw + ow), y1 = Math.min(H, (j + 1) * th + oh);
+      const t = run(x0, y0, x1 - x0, y1 - y0, 1100); if (t) return t; await tick();
+    }
+  }
+  return null;
+}
+function imageToCanvas(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 2600 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(u); res(c);
+    };
+    img.onerror = () => { URL.revokeObjectURL(u); rej(new Error('img')); };
+    img.src = u;
+  });
+}
+async function qrFromPdf(file) {
+  await needLib('pdf');
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    let code = null;
+    for (const u of ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js']) {
+      try { const r = await fetch(u); if (r.ok) { code = await r.text(); break; } } catch (e) {}
+    }
+    if (!code) throw new Error('worker');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+  }
+  const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+  for (let n = 1; n <= Math.min(doc.numPages, 4); n++) {
+    const pg = await doc.getPage(n), v0 = pg.getViewport({ scale: 1 }), sc = Math.min(3, Math.max(1, 2200 / Math.max(v0.width, v0.height)));
+    const vp = pg.getViewport({ scale: sc }), c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    await pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    const t = await qrFromCanvas(c); if (t) return t;
+  }
+  return null;
+}
+function qrDataUrl(text) {                            // 重新產生乾淨、高對比、含白邊的 QR（比拍照原圖好掃）
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+  const q = qrcode(0, 'M'); q.addData(text, 'Byte'); q.make();
+  const n = q.getModuleCount(), cell = Math.max(4, Math.floor(760 / (n + 8))), size = (n + 8) * cell, c = document.createElement('canvas');
+  c.width = c.height = size; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, size, size); x.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) x.fillRect((k + 4) * cell, (r + 4) * cell, cell, cell);
+  return c.toDataURL('image/png');
+}
+let qrBusy = false;
+async function addVoucher(file) {
+  if (!file || qrBusy) return;
+  if (!canEdit()) return toast('離線中，目前只能查看');
+  qrBusy = true; toast('辨識 QR Code 中…');
+  try {
+    let text = null, img = null;
+    try { await needLib('jsqr'); text = file.type === 'application/pdf' ? await qrFromPdf(file) : await qrFromCanvas(await imageToCanvas(file)); } catch (e) { console.warn('qr decode', e); }
+    if (text) { try { await needLib('qrgen'); img = qrDataUrl(text); } catch (e) { console.warn('qr gen', e); } }
+    const n = state.check_items.filter(i => i.kind === 'voucher').length + 1;
+    const row = { id: crypto.randomUUID(), kind: 'voucher', cat_id: null, title: '憑證 ' + n, done: false, note: null, qr_text: text, qr_img: img };
+    state.check_items.push(row); persist(); render();
+    if (sb) {
+      const { error } = await sb.from('check_items').insert({ ...row, trip_id: TRIP });
+      if (error) { toast('新增失敗：' + error.message); await loadAll(); return; }
+      await uploadFiles('check_items', row.id, [file]); await loadAll();
+    }
+    toast(text ? '已儲存 QR Code，點「開啟 QR」就能出示' : '沒偵測到 QR Code，已保存原檔；可重拍或改用截圖再試');
+  } finally { qrBusy = false; }
+}
+let wakeLock = null;
+async function showQR(id) {
+  const it = state.check_items.find(x => x.id === id); if (!it) return;
+  const f = filesOf(id).find(x => /^image\//.test(x.mime || ''));
+  const body = it.qr_img ? `<img class="qrbig" src="${esc(it.qr_img)}" alt="QR Code">` : f ? `<img class="orig" src="${esc(fileUrl(f.path))}" alt="${esc(it.title)}">` : '<p>這個憑證沒有可顯示的 QR Code</p>';
+  document.body.insertAdjacentHTML('beforeend', `<div id="qrov"><h2>${esc(it.title)}</h2>${body}<div class="hint">網頁無法自動調整系統亮度，請把手機亮度調到最高（已保持螢幕不熄滅）</div><button type="button" data-qrclose>關閉</button></div>`);
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
+}
+function closeQR() { $('#qrov')?.remove(); try { wakeLock?.release(); } catch (e) {} wakeLock = null; }
+document.addEventListener('change', e => {
+  const el = e.target.closest?.('[data-qrfile]'); if (!el) return;
+  const f = el.files && el.files[0]; el.value = ''; addVoucher(f);
+});
 const SUBS = [['restaurants', '餐廳'], ['todo', '待辦事項'], ['prep', '行前準備'], ['docs', '旅行文件'], ['notes', '備忘']];
 const PRESETS = { restaurants: ['早餐', '午餐', '晚餐', '咖啡甜點', '小吃宵夜'], todo: ['出發前', '旅途中'], prep: ['證件與機票', '衣物', '電子用品', '藥品盥洗'], docs: ['護照與簽證', '機票與住宿憑證', '保險'] };
 
@@ -630,26 +765,10 @@ async function moveIt(id, dir) {
   } finally { saving = false; }
 }
 const endMin = r => toMin(r?.end_time) ?? (toMin(r?.time) != null && r?.duration ? toMin(r.time) + r.duration : null);
-const hotelFor = night => state.lodging.find(l => l.check_in && l.check_out && l.check_in <= night && night < l.check_out);
-const tripEnds = () => { const t = curTrip(), ds = tripDays(); return [t?.start_day || ds[0], t?.end_day || t?.start_day || ds[ds.length - 1]]; };
-function startAnchor(day) {                   // 每天第一個行程：第一天從家裡出發，其餘從前一晚的住宿出發
-  if (!day) return null;
-  if (day === tripEnds()[0]) { const a = curTrip()?.home_address || ''; return { icon: '🏠', name: '家裡', sub: a, place: a, tm: '出發', home: true }; }
-  const h = hotelFor(shiftDay(day, -1));
-  return h ? { icon: '🏨', name: h.name, sub: h.address || '', place: h.address || h.name, tm: '' } : { icon: '🏨', name: '飯店', sub: '尚未設定住宿', place: '', tm: '', none: true };
-}
-function endAnchor(day) {                     // 每天最後一個行程：最後一天回到家裡，其餘回到當晚的住宿
-  if (!day) return null;
-  if (day === tripEnds()[1]) { const a = curTrip()?.home_address || ''; return { icon: '🏠', name: '家裡', sub: a, place: a, tm: '返回', home: true }; }
-  const h = hotelFor(day);
-  return h ? { icon: '🏨', name: h.name, sub: h.address || '', place: h.address || h.name, tm: '' } : { icon: '🏨', name: '飯店', sub: '尚未設定住宿', place: '', tm: '', none: true };
-}
 function prevOf(id) {
   const rows = dayRows(), i = rows.findIndex(x => x.id === id);
-  if (i > 0) return rows[i - 1];
-  const a = startAnchor(selDay); return a?.place ? { title: a.name, place: a.place } : null;
+  return i > 0 ? rows[i - 1] : null;
 }
-const ancHtml = a => `<li class="it anc"><div class="tm">${esc(a.tm || '')}</div><span class="ln"><i></i></span><div class="card ${a.none ? 'dim' : ''}" ${a.home ? `data-edit="tw_trips:${esc(TRIP)}"` : 'data-tab="trip"'}><strong>${a.icon} ${esc(a.name)}</strong>${a.sub ? `<div class="sub">${esc(a.sub)}</div>` : a.home ? '<div class="sub">點此設定家裡地址</div>' : ''}</div></li>`;
 const itemHtml = (r, i, n) => {
   const dur = r.duration, h = dur ? Math.min(180, Math.round(dur / 60 * 40)) : 0, e = endMin(r), q = rawPlace(r);
   const nav = q ? `<a class="nav" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}">➤ 導航</a>` : `<span class="nav off">無地點</span>`;
@@ -660,6 +779,7 @@ const itemHtml = (r, i, n) => {
 const gapHtml = px => px > 0 ? `<li class="gap" style="height:${px}px"><span></span><span class="ln"></span><span></span></li>` : '';
 const rawPlace = r => r?.place || r?.title || '';          // 使用者填寫的原文（Google 地圖連結用）
 const placeOf = rawPlace;                                   // 估算時間也只使用行程裡填寫的地點，不加任何額外文字
+const GMODE = { walk: 'walking', bike: 'bicycling', taxi: 'driving', car: 'driving' };
 const gmapUrl = (mode, from, to) => `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=${GMODE[mode] || 'transit'}`;
 const legHtml = (r, prev) => {
   const m = MODES[r.mode], n = filesOf(r.id, 'transport').length, open = openLeg === r.id;
@@ -858,15 +978,14 @@ const views = {
       const n = d && t0 ? Math.round((new Date(d + 'T00:00') - new Date(t0 + 'T00:00')) / 864e5) + 1 : 0;
       return `<button class="dchip ${d === selDay ? 'on' : ''}" data-day="${d}"><b>${d ? (n >= 1 ? 'D' + n : '其他') : '未排'}</b><span>${d ? d.slice(5).replace('-', '/') : '日期'}</span></button>`;
     }).join('');
-    const rows = dayRows(), sA = startAnchor(selDay), eA = endAnchor(selDay);
-    let h = sA ? ancHtml(sA) : '';
+    const rows = dayRows();
+    let h = '';
     rows.forEach((r, i) => {
-      const prev = i ? rows[i - 1] : (sA?.place ? { title: sA.name, place: sA.place } : null);
+      const prev = i ? rows[i - 1] : null;
       if (prev) h += legHtml(r, prev);
       if (i) { const pe = endMin(rows[i - 1]), st = toMin(r.time); if (pe != null && st != null && st > pe) h += gapHtml(Math.min(48, Math.round((st - pe) / 60 * 16))); }
       h += itemHtml(r, i, rows.length);
     });
-    if (eA) h += ancHtml(eA);
     return `<div class="days">${chips}</div><h2>${fmtDay(selDay)}</h2>` + (h ? `<ul class="tl">${h}</ul>` : `<div class="empty small">這天還沒有安排，按右下角新增。</div>`) + (rows.length || !h ? '' : `<div class="empty small">按右下角新增第一個行程。</div>`) + add('itinerary');
   },
   legCard(leg, title) {
@@ -906,7 +1025,7 @@ const views = {
   },
   info() {
     const chips = SUBS.map(([k, v]) => `<button class="dchip ${k === infoTab ? 'on' : ''}" data-sub="${k}"><span>${v}</span></button>`).join('');
-    return `<div class="days">${chips}</div>` + (infoTab === 'restaurants' ? views.restaurants() : infoTab === 'notes' ? views.notes() : views.checklist(infoTab));
+    return `<div class="days">${chips}</div>` + (infoTab === 'docs' ? views.vouchers() : '') + (infoTab === 'restaurants' ? views.restaurants() : infoTab === 'notes' ? views.notes() : views.checklist(infoTab));
   },
   restaurants() {
     const cats = state.check_cats.filter(c => c.kind === 'restaurants'), rs = state.restaurants;
@@ -926,6 +1045,13 @@ const views = {
       h += (cats.length ? `<h3 class="cat"><span class="ct" data-fold="loose"><i>${open ? '▾' : '▸'}</i>未分類 <small>${loose.length}</small></span></h3>` : '') + (open || !cats.length ? loose.map(card).join('') : '');
     }
     return h + add('restaurants');
+  },
+  vouchers() {
+    const vs = state.check_items.filter(i => i.kind === 'voucher'), open = !folded.has('vouchers');
+    const card = i => `<div class="row blk vcard" data-edit="check_items:${i.id}"><div class="vi">${i.qr_img ? `<img src="${esc(i.qr_img)}" alt="">` : '🎫'}</div><div class="vt"><strong>${esc(i.title)}</strong>${i.note ? `<div class="note">${esc(i.note)}</div>` : ''}${i.qr_img ? '' : '<div class="sub">未偵測到 QR，顯示原圖</div>'}</div><button type="button" class="vbtn" data-qrshow="${i.id}">開啟 QR</button></div>`;
+    return `<h3 class="cat"><span class="ct" data-fold="vouchers"><i>${open ? '▾' : '▸'}</i>🎫 憑證 <small>${vs.length}</small></span><span><button class="mini" data-qrpick="cam">📷 拍照掃描</button> <button class="mini" data-qrpick="up">🖼 上傳</button></span></h3>
+      <input type="file" id="qr-cam" data-qrfile accept="image/*" capture="environment" hidden><input type="file" id="qr-up" data-qrfile accept="image/*,application/pdf" hidden>` +
+      (open ? (vs.map(card).join('') || '<div class="empty small">拍下或上傳有 QR Code 的票券、憑證（照片或 PDF），之後一鍵出示。</div>') : '');
   },
   checklist(kind) {
     const cats = state.check_cats.filter(c => c.kind === kind), items = state.check_items.filter(i => i.kind === kind);
@@ -995,7 +1121,7 @@ function render() {
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-fold],[data-foldall],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-fold],[data-foldall],[data-qrpick],[data-qrshow],[data-qrclose],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
   else if ('day' in el.dataset) { selDay = el.dataset.day; openLeg = null; render(); }
   else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
@@ -1004,6 +1130,9 @@ document.addEventListener('click', e => {
   else if (el.dataset.trans) toggleLeg(el.dataset.trans);
   else if ('wxsave' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); const v = ($('#wxplace')?.value || '').trim(); if (!curTrip()) return toast('找不到這趟旅程'); wxEdit = false; wxLive = null; wx = { key: '', rows: [], now: null, msg: '', loading: false }; saveRow('tw_trips', { ...curTrip(), weather_place: v || null }); }
   else if ('join' in el.dataset) joinTrip();
+  else if ('qrpick' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); $('#qr-' + el.dataset.qrpick)?.click(); }
+  else if ('qrshow' in el.dataset) showQR(el.dataset.qrshow);
+  else if ('qrclose' in el.dataset) closeQR();
   else if ('mv' in el.dataset) moveIt(el.dataset.mv, +el.dataset.dir);
   else if ('rmit' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); if (confirm('確定刪除這個行程？')) delRow('itinerary', el.dataset.rmit); }
   else if ('wxedit' in el.dataset) { wxEdit = true; render(); }

@@ -6,10 +6,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>旅行手帳</title>
+<meta name="app-version" content="1.7.0">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
-:root{--bg:#f5f0de;--card:#fffdf4;--ink:#2b4a47;--mute:#6b8279;--sea:#3a86b8;--sky:#bfe0ef;--sun:#f2b84b;--leaf:#5e9e6e;--line:#d9d3b8;--bad:#c0563f;--serif:"Hiragino Mincho ProN","Songti TC","Noto Serif TC",serif}
-@media (prefers-color-scheme:dark){:root{--bg:#16262a;--card:#1f3438;--ink:#eaf1e6;--mute:#9db5ab;--sea:#78b9e0;--sky:#1d3f57;--leaf:#86c28f;--line:#2f4a4d;--bad:#e98a73}}
+:root{--bg:#f5f0de;--card:#fffdf4;--ink:#2b4a47;--mute:#6b8279;--sea:#3a86b8;--sky:#bfe0ef;--sun:#f2b84b;--leaf:#5e9e6e;--line:#d9d3b8;--bad:#c0563f;--onsun:#2b4a47;--onleaf:#fff;--btn:#16283f;--serif:"Hiragino Mincho ProN","Songti TC","Noto Serif TC",serif}
+@media (prefers-color-scheme:dark){:root{--bg:#16262a;--card:#1f3438;--ink:#eaf1e6;--mute:#9db5ab;--sea:#78b9e0;--sky:#1d3f57;--leaf:#86c28f;--line:#2f4a4d;--bad:#e98a73;--btn:#3a86b8}}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}
 header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
@@ -24,8 +25,8 @@ main{max-width:640px;margin:0 auto;padding:12px 16px calc(150px + env(safe-area-
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;gap:2px;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:1px solid var(--line)}
 .home nav{display:none}
 nav button{flex:1;border:0;background:none;color:var(--mute);padding:9px 0;font:inherit;font-weight:600;font-size:.92rem;border-radius:999px}
-nav button.on{background:var(--sun);color:#2b4a47}
-.fab{position:fixed;right:18px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:54px;height:54px;border-radius:50%;border:0;background:var(--sun);color:#2b4a47;font-size:1.8rem;line-height:1;box-shadow:0 3px 10px rgba(43,74,71,.3);animation:float 3.5s ease-in-out infinite}
+nav button.on{background:var(--sun);color:var(--onsun)}
+.fab{position:fixed;right:18px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:54px;height:54px;border-radius:50%;border:0;background:var(--sun);color:var(--onsun);font-size:1.8rem;line-height:1;box-shadow:0 3px 10px rgba(43,74,71,.3);animation:float 3.5s ease-in-out infinite}
 .home .fab{bottom:calc(22px + env(safe-area-inset-bottom,0px))}
 /* hero scene */
 .hero{position:relative;border-radius:22px;overflow:hidden;margin-bottom:10px;height:100px;box-shadow:0 8px 22px rgba(58,134,184,.22)}
@@ -75,8 +76,8 @@ th{font-size:.85rem;color:var(--mute);font-weight:600}
 .dchip{flex:0 0 auto;min-width:62px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:14px;padding:6px 10px;font:inherit;line-height:1.25;text-align:center}
 .dchip b{display:block;font:700 .78rem var(--serif);color:var(--mute)}
 .dchip span{font-weight:700}
-.dchip.on{background:var(--sun);border-color:var(--sun);color:#2b4a47}
-.dchip.on b{color:#2b4a47}
+.dchip.on{background:var(--sun);border-color:var(--sun);color:var(--onsun)}
+.dchip.on b{color:var(--onsun)}
 .legcard{background:var(--card);border-radius:16px;padding:2px 14px 12px;margin:14px 0;box-shadow:0 2px 0 var(--line)}
 .legcard h2{margin:12px 0 4px}
 .fl{padding:10px 0;border-top:1px dashed var(--line);cursor:pointer}
@@ -135,8 +136,8 @@ body{background-image:linear-gradient(180deg,var(--sky) 0,var(--bg) 360px);backg
 .wxd{flex:0 0 64px;background:var(--bg);border-radius:12px;padding:6px 4px;text-align:center;line-height:1.3}
 .wxi{font-size:1.5rem}
 .wxnow{margin:6px 0;font-size:1.05rem}
-.wxd.trip{background:var(--sun);color:#2b4a47}
-.wxd.trip .sub{color:#2b4a47}
+.wxd.trip{background:var(--sun);color:var(--onsun)}
+.wxd.trip .sub{color:var(--onsun)}
 .cstat{margin:8px 0}
 .cs1{display:flex;justify-content:space-between;gap:8px}
 .cs1 small{color:var(--mute);font-size:.8rem}
@@ -176,7 +177,7 @@ textarea{min-height:80px}
 .chk input{width:auto}
 .btns{display:flex;gap:8px;margin-top:16px}
 .btns button{flex:1;padding:10px;border-radius:999px;border:1px solid var(--line);background:none;color:var(--ink);font:inherit}
-.btns .go{background:var(--leaf);border-color:var(--leaf);color:#fff;font-weight:700}
+.btns .go{background:var(--leaf);border-color:var(--leaf);color:var(--onleaf);font-weight:700}
 .btns .del{color:var(--bad)}
 
 /* 行程表單（底部抽屜）與卡片 */
@@ -193,7 +194,7 @@ dialog:has(.itf){width:100%;max-width:none;margin:auto 0 0;border-radius:26px 26
 .itf select{padding-right:34px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='18' viewBox='0 0 12 18'%3E%3Cpath d='M2 7l4-4 4 4M2 11l4 4 4-4' fill='none' stroke='%236b8279' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
 .itf input[type=time]::-webkit-date-and-time-value{text-align:center;margin:0}
 .itf textarea{min-height:52px;resize:none}
-.itf .submit{display:block;width:100%;margin-top:22px;padding:15px;border:0;border-radius:16px;background:#16283f;color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
+.itf .submit{display:block;width:100%;margin-top:22px;padding:15px;border:0;border-radius:16px;background:var(--btn);color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
 .itf .delbtn{display:block;width:100%;margin-top:6px;padding:12px;border:0;background:none;color:var(--bad);font:inherit}
 .itf .datebox{margin:6px 0 0}
 .cpill{display:inline-block;margin-right:8px;padding:1px 10px;border-radius:10px;font-size:.78rem;font-weight:700;vertical-align:middle}
@@ -204,22 +205,33 @@ dialog:has(.itf){width:100%;max-width:none;margin:auto 0 0;border-radius:26px 26
 .tl .cbar button{flex:0 0 auto;width:26px;height:26px;padding:0;border:0;border-radius:8px;background:var(--bg);color:var(--ink);font-size:.75rem;line-height:1}
 .tl .cbar button:disabled{opacity:.3}
 .tl .cbar button.rm{color:var(--bad)}
-@media (prefers-color-scheme:dark){.itf .submit{background:#3a86b8}.cp-交通{background:#233a63;color:#a9c4f5}.cp-景點{background:#1f4630;color:#9fdcb3}.cp-美食{background:#5a3a1c;color:#f5c99a}.cp-購物{background:#552a46;color:#f1b4d9}}
+@media (prefers-color-scheme:dark){.cp-交通{background:#233a63;color:#a9c4f5}.cp-景點{background:#1f4630;color:#9fdcb3}.cp-美食{background:#5a3a1c;color:#f5c99a}.cp-購物{background:#552a46;color:#f1b4d9}}
 
 /* 憑證 QR */
 .vcard{display:flex;align-items:center;gap:12px}
 .vcard .vi{flex:0 0 auto;width:54px;height:54px;border-radius:10px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:1.6rem;overflow:hidden}
 .vcard .vi img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
 .vcard .vt{flex:1;min-width:0}
-.vcard .vbtn{flex:0 0 auto;padding:10px 14px;border:0;border-radius:12px;background:#16283f;color:#fff;font:inherit;font-weight:700;font-size:.9rem}
-@media (prefers-color-scheme:dark){.vcard .vbtn{background:#3a86b8}}
+.vcard .vbtn{flex:0 0 auto;padding:10px 14px;border:0;border-radius:12px;background:var(--btn);color:#fff;font:inherit;font-weight:700;font-size:.9rem}
 #qrov{position:fixed;inset:0;z-index:2000;background:#fff;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:calc(24px + env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px));text-align:center}
 #qrov h2{margin:0;font-size:1.25rem;color:#111}
 #qrov img.qrbig{width:min(90vw,62vh);height:auto;background:#fff;image-rendering:pixelated}
 #qrov img.orig{max-width:94vw;max-height:66vh;object-fit:contain}
 #qrov .hint{font-size:.8rem;color:#666}
-#qrov button{padding:14px 40px;border:0;border-radius:16px;background:#16283f;color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
+#qrov button{padding:14px 40px;border:0;border-radius:16px;background:var(--btn);color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
+.ver{margin:26px 0 90px;text-align:center;font-size:.72rem;color:var(--mute);opacity:.7;letter-spacing:.04em}
 #toast{position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:.9rem;display:none;z-index:20}
+/* 配色風格 */
+html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 38%,color-mix(in srgb,var(--sea) 34%,transparent))}
+.thg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.thg label{position:relative;display:block;margin:0;padding:9px 10px 10px;border:2px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);cursor:pointer;transition:transform .12s,border-color .12s}
+.thg label:active{transform:scale(.97)}
+.thg label.sel{border-color:var(--sea);box-shadow:0 0 0 3px color-mix(in srgb,var(--sea) 22%,transparent)}
+.thg input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+.thg b{display:block;font-size:.88rem;line-height:1.3;color:var(--ink)}
+.thg small{display:block;margin:1px 0 7px;font-size:.72rem;line-height:1.35;color:var(--mute)}
+.sw{display:flex;padding-left:4px}
+.sw i{width:20px;height:20px;border-radius:50%;margin-left:-4px;border:2px solid var(--card);box-shadow:0 0 0 1px rgba(0,0,0,.12)}
 </style>
 </head>
 <body>
@@ -230,11 +242,67 @@ dialog:has(.itf){width:100%;max-width:none;margin:auto 0 0;border-radius:26px 26
 <div id="toast"></div>
 
 <script>
+const APP_VERSION = '1.7.0', APP_DATE = '2026-11-18';   // 每次修改請同步更新這裡與 CHANGELOG.md
 /* ===== 設定：填入 Supabase 後即啟用雲端同步；留空則為本機模式 ===== */
 const CONFIG = {
   SUPABASE_URL: 'https://kadmtabkxzzytxyodbhf.supabase.co',
   SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImthZG10YWJreHp6eXR4eW9kYmhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzMDU0ODgsImV4cCI6MjEwOTg4MTQ4OH0.K0ZT8nsJDb-H4SWQC9GcmtHlizR8qkKxuiQKXNIlmL4'
 };
+
+/* ===== 配色風格（來源：Color.md；每趟旅程可各自選一套） ===== */
+const SANS = '"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif';
+// p 主色 / bg 背景 / card 卡片 / alt 交錯區塊 / acc 點綴 / tx 文字 / serif 標題是否用襯線
+// 03、05 的交錯區塊原本是深色反轉區塊；本站拿它當頁面頂部漸層，所以改用同色系淺階（sky）
+const PALETTES = {
+  default: { name: '宮崎駿（預設）', tag: '藍天草地・動畫感', sw: ['#3a86b8', '#f5f0de', '#fffdf4', '#bfe0ef', '#f2b84b'] },
+  earth:   { name: '溫暖大地', tag: '山林露營・自然慢活', p: '#4A5D4E', bg: '#F4F1EA', card: '#FFFFFF', alt: '#EAE5D9', acc: '#D97706', tx: '#2C2A29', serif: false },
+  ocean:   { name: '蔚藍海島', tag: '海島度假・夏日郵輪', p: '#0284C7', bg: '#F8FAFC', card: '#FFFFFF', alt: '#E0F2FE', acc: '#EAB308', tx: '#0F172A', serif: false },
+  luxe:    { name: '輕奢城市', tag: '城市導覽・精品旅宿', p: '#18181B', bg: '#FAFAFA', card: '#FFFFFF', alt: '#18181B', sky: '#EDEDEF', acc: '#C29B38', tx: '#18181B', serif: true },
+  retro:   { name: '復古底片', tag: '老街散策・懷舊鐵道', p: '#9A3412', bg: '#FFFBEB', card: '#FEF3C7', alt: '#FDE68A', acc: '#0F766E', tx: '#451A03', serif: true },
+  nordic:  { name: '北歐極光', tag: '極光・冰雪探險', p: '#0F172A', bg: '#F1F5F9', card: '#FFFFFF', alt: '#1E293B', sky: '#DCE6F1', acc: '#10B981', tx: '#1E293B', serif: false },
+  kyoto:   { name: '京都禪風', tag: '溫泉旅館・寺廟巡禮', p: '#3F6212', bg: '#FAF8F5', card: '#FFFFFF', alt: '#ECFCCB', acc: '#B91C1C', tx: '#1C1917', serif: true },
+  desert:  { name: '摩洛哥日落', tag: '沙漠露營・異國秘境', p: '#C2410C', bg: '#FDF8F6', card: '#FFFFFF', alt: '#FFEDD5', acc: '#1D4ED8', tx: '#431407', serif: true },
+  lavender:{ name: '普羅旺斯薰衣草', tag: '南法莊園・浪漫蜜月', p: '#6D28D9', bg: '#FAF5FF', card: '#FFFFFF', alt: '#F3E8FF', acc: '#DB2777', tx: '#2E1065', serif: true },
+  jungle:  { name: '熱帶雨林', tag: '峇里島・瑜珈靜修', p: '#047857', bg: '#F0FDF4', card: '#FFFFFF', alt: '#DCFCE7', acc: '#F97316', tx: '#064E3B', serif: false },
+  vivid:   { name: '活力背包客', tag: '自助旅行・公路冒險', p: '#2563EB', bg: '#FFFFFF', card: '#F8FAFC', alt: '#EFF6FF', acc: '#F59E0B', tx: '#111827', serif: false }
+};
+const hex2 = h => { h = h.replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+const toHex = a => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+const mixc = (a, b, t) => { const x = hex2(a), y = hex2(b); return toHex(x.map((v, i) => v + (y[i] - v) * t)); };   // t = b 的比例
+const lumi = h => { const [r, g, b] = hex2(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * r + .7152 * g + .0722 * b; };
+const contrast = (a, b) => { const x = lumi(a), y = lumi(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+const bestOn = (bg, dark) => contrast(bg, '#ffffff') >= contrast(bg, dark) ? '#ffffff' : dark;
+const lightenTo = (c, on, min) => { let t = .1; while (t < 1 && contrast(c, on) < min) { c = mixc(c, '#ffffff', .1); t += .1; } return c; };
+function paletteCss() {
+  let css = '';
+  for (const [k, t] of Object.entries(PALETTES)) {
+    if (!t.p) continue;
+    const sky = t.sky || t.alt, font = t.serif ? '' : `--serif:${SANS};`;
+    const L = `--bg:${t.bg};--card:${t.card};--ink:${t.tx};--mute:${mixc(t.tx, t.bg, .3)};--sea:${t.p};--sky:${sky};--sun:${t.acc};--leaf:${t.p};--line:${mixc(sky, t.tx, .14)};--onsun:${bestOn(t.acc, t.tx)};--onleaf:${bestOn(t.p, t.tx)};--btn:${t.p};${font}`;
+    const dbg = mixc(t.tx, '#000000', .45), dcard = mixc(dbg, '#ffffff', .08), dp = lightenTo(t.p, dcard, 4.5);
+    const D = `--bg:${dbg};--card:${dcard};--ink:${t.bg === '#FFFFFF' ? '#F3F4F6' : t.bg};--mute:${mixc(t.bg, dbg, .38)};--sea:${dp};--sky:${mixc(dbg, t.p, .25)};--sun:${t.acc};--leaf:${dp};--line:${mixc(dcard, '#ffffff', .14)};--onsun:${bestOn(t.acc, dbg)};--onleaf:${bestOn(dp, dbg)};--btn:${mixc(t.p, '#ffffff', lumi(t.p) < .05 ? .2 : .06)};`;
+    css += `:root[data-theme="${k}"]{${L}}@media (prefers-color-scheme:dark){:root[data-theme="${k}"]{${D}}}\n`;
+  }
+  return css;
+}
+{ const s = document.createElement('style'); s.id = 'paletteCss'; s.textContent = paletteCss(); document.head.appendChild(s); }
+const paletteOf = t => {
+  let k = null;
+  if (t && 'theme' in t) k = t.theme;                       // 資料庫已有 theme 欄位：以雲端為準
+  else if (t?.id) { try { k = localStorage.getItem('tw:theme:' + t.id); } catch (e) {} }   // 沒有欄位：這支手機自己記
+  return PALETTES[k] ? k : 'default';
+};
+function applyPalette(k) {
+  const root = document.documentElement;
+  if (!PALETTES[k] || k === 'default') delete root.dataset.theme; else root.dataset.theme = k;
+  let m = document.querySelector('meta[name=theme-color]');
+  if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }
+  m.content = getComputedStyle(root).getPropertyValue('--bg').trim() || '#f5f0de';
+}
+const paletteHtml = cur => `<label>配色風格（這趟旅程專用，儲存前可即時預覽）</label><div class="thg">${Object.entries(PALETTES).map(([k, t]) => {
+  const sw = t.sw || [t.p, t.bg, t.card, t.sky || t.alt, t.acc];
+  return `<label class="${k === cur ? 'sel' : ''}"><input type="radio" name="theme" value="${k}" ${k === cur ? 'checked' : ''}><b>${t.name}</b><small>${t.tag}</small><span class="sw">${sw.map(c => `<i style="background:${c}"></i>`).join('')}</span></label>`;
+}).join('')}</div>`;
 const DEFAULT_RATES = { TWD: 1, JPY: 0.21, KRW: 0.023, USD: 32, EUR: 35, THB: 0.9, HKD: 4.1 };
 const INFO_CATS = ['簽證入境', '保險', '交通票券', '網卡通訊', '緊急聯絡', '匯兌', '其他'];
 
@@ -263,11 +331,20 @@ const FKEY = 'tw:fold:' + TRIP;
 const folded = new Set(JSON.parse(localStorage.getItem(FKEY) || '[]'));
 const foldSave = () => localStorage.setItem(FKEY, JSON.stringify([...folded]));
 const curTrip = () => trips.find(t => t.id === TRIP);
+applyPalette(TRIP ? paletteOf(curTrip()) : 'default');
 const persist = () => { localStorage.setItem('tw:trips', JSON.stringify(trips)); if (TRIP) localStorage.setItem(KEY, JSON.stringify(state)); };
 const canEdit = () => !CONFIGURED || online;
 const mname = id => state.members.find(m => m.id === id)?.name || '(已刪除)';
 const shortId = () => [...crypto.getRandomValues(new Uint8Array(10))].map(b => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2200); }
+let swReady = false;
+function verLine() {
+  let s = `旅行手帳 v${APP_VERSION} · ${APP_DATE}`;
+  if (swReady) s += ' · 離線可開啟';
+  const ts = +(localStorage.getItem('tw:synced') || 0);
+  if (ts) { const d = new Date(ts), p = n => String(n).padStart(2, '0'); s += ` · 上次同步 ${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+  return s;
+}
 function setSync() { const s = $('#sync'); s.textContent = !CONFIGURED ? '本機模式' : online ? '已同步' : '離線，唯讀'; s.className = (!CONFIGURED || !online) ? 'off' : ''; }
 
 /* ===== 資料層 ===== */
@@ -283,6 +360,7 @@ async function loadAll() {
       }
       await signFiles();
       online = true;
+      try { localStorage.setItem('tw:synced', String(Date.now())); } catch (e) {}
     } catch (e) { online = false; }
   }
   if (TRIP && !curTrip() && !CONFIGURED) {          // 舊連結：自動補一筆旅程
@@ -290,19 +368,39 @@ async function loadAll() {
     if (sb) sb.from('tw_trips').upsert(t);
   }
   persist(); setSync(); render();
+  if (online && !TRIP) setTimeout(cacheAllTrips, 1500);
+}
+async function cacheAllTrips() {   // 在首頁連網時，順便把每一趟旅程存到手機裡，之後沒網路也能開
+  if (!sb || !online || TRIP || cacheAllTrips.busy) return;
+  let last = 0; try { last = +localStorage.getItem('tw:cacheall') || 0; } catch (e) {}
+  if (Date.now() - last < 10 * 60 * 1000) return;
+  cacheAllTrips.busy = true;
+  try {
+    for (const t of trips) {
+      const res = await Promise.all(TABLES.map(x => sb.from(x).select('*').eq('trip_id', t.id)));
+      if (res.some(r => r.error)) continue;
+      const st = {}; res.forEach((r, i) => { st[TABLES[i]] = r.data; });
+      try { localStorage.setItem('tw:data:' + t.id, JSON.stringify(st)); } catch (e) { break; }   // 空間不足就停止
+    }
+    localStorage.setItem('tw:cacheall', String(Date.now()));
+  } catch (e) {} finally { cacheAllTrips.busy = false; }
 }
 async function saveRow(t, row) {
   const arr = t === 'tw_trips' ? trips : state[t], i = arr.findIndex(r => r.id === row.id);
   if (i >= 0) arr[i] = row; else arr.push(row);      // 先更新畫面，同 id 不會重複新增
+  if (t === 'tw_trips') { try { localStorage.setItem('tw:theme:' + row.id, row.theme || 'default'); } catch (e) {} }
   persist(); render();
   if (sb) {
+    const saveTheme = async () => { if (t === 'tw_trips') { try { await sb.from('tw_trips').update({ theme: row.theme || null }).eq('id', row.id); } catch (e) {} } };   // 欄位尚未建立時會失敗，忽略即可
     if (t === 'tw_trips' && i < 0) {                   // 新旅程：由伺服器建立並自動加入成員
       await ready;
       const r = await sb.rpc('create_trip', { p_id: row.id, p_name: row.name, p_start: row.start_day, p_end: row.end_day });
-      if (!r.error && r.data) return loadAll();
+      if (!r.error && r.data) { await saveTheme(); return loadAll(); }
     }
-    const { error } = await sb.from(t).upsert(t === 'tw_trips' ? row : { ...row, trip_id: TRIP });
+    const { theme, ...plain } = row;
+    const { error } = await sb.from(t).upsert(t === 'tw_trips' ? plain : { ...row, trip_id: TRIP });
     if (error) toast('儲存失敗：' + error.message);
+    else await saveTheme();
     return loadAll();
   }
 }
@@ -368,7 +466,7 @@ function fieldHtml([k, type, label], v) {
 function formHtml(t, row) {
   if (t === 'flights') return flightForm(row);
   if (t === 'itinerary') return itineraryForm(row);
-  if (t !== 'expenses') return FORMS[t].fields.map(f => fieldHtml(f, row[f[0]])).join('') + (t === 'restaurants' ? '<div class="sub" id="mapst"></div>' + catSelect(row.cat_id) : '') + (ATT.has(t) ? attHtml(cur.newId) : '');
+  if (t !== 'expenses') return FORMS[t].fields.map(f => fieldHtml(f, row[f[0]])).join('') + (t === 'tw_trips' ? paletteHtml(paletteOf(row)) : '') + (t === 'restaurants' ? '<div class="sub" id="mapst"></div>' + catSelect(row.cat_id) : '') + (ATT.has(t) ? attHtml(cur.newId) : '');
   const ccy = row.currency || 'TWD', rate = row.rate ?? DEFAULT_RATES[ccy] ?? 1;
   const split = row.split?.length ? row.split : state.members.map(m => m.id);
   const pays = payersOf(row), ecats = EXP_CATS.concat([...new Set(state.expenses.map(e => e.category).filter(c => c && !EXP_CATS.includes(c)))]);
@@ -398,6 +496,10 @@ function openForm(t, id, extra = {}) {
   if ($('#del')) $('#del').onclick = async () => { if (confirm(t === 'tw_trips' ? '刪除旅程會連同所有行程、資訊與帳務一起刪除，確定嗎？' : '確定刪除？')) { await delRow(t, id); $('#dlg').close(); if (t === 'tw_trips' && id === TRIP) location.href = location.pathname; } };
   if ($('#cur')) $('#cur').onchange = e => { $('#rate').value = DEFAULT_RATES[e.target.value] ?? 1; };
   wireForm(t);
+  if (t === 'tw_trips') $('#frm').querySelectorAll('.thg input').forEach(r => r.onchange = () => {   // 即時預覽
+    $('#frm').querySelectorAll('.thg label').forEach(l => l.classList.toggle('sel', l.contains(r) && r.checked));
+    applyPalette(r.value);
+  });
   $('#dlg').showModal();
   if (t === 'itinerary') document.activeElement?.blur();
 }
@@ -409,6 +511,7 @@ $('#frm').onsubmit = async e => {
   for (const [k, v] of fd.entries()) if (k !== 'split') vals[k] = v === '' ? null : v;
   const row = { ...(existing || {}), ...vals, ...(existing ? {} : cur.extra || {}) };
   if (cur.t === 'tw_trips' && row.start_day && row.end_day && row.end_day < row.start_day) return toast('回程日不能早於出發日');
+  if (cur.t === 'tw_trips') row.theme = (!row.theme || row.theme === 'default' || !PALETTES[row.theme]) ? null : row.theme;
   if (cur.t === 'expenses') { row.payers = fd.getAll('payers'); if (!row.payers.length) return toast('請至少選擇一位付款人'); row.payer = row.payers[0]; row.split = fd.getAll('split'); row.amount = +row.amount; row.rate = +row.rate || 1; }
   if (cur.t === 'itinerary') {
     row.title = (row.title || '').trim();
@@ -966,7 +1069,7 @@ const views = {
     return `<div class="hero big">${scene('big')}<div class="hl"><h1>旅行手帳</h1><p>今天，要去哪裡呢？</p></div></div><div class="catbar"><button class="mini" data-join>🔗 用代碼或連結加入旅程</button></div>` +
       (rows.length ? rows.map((t, i) => `<div class="trip" style="--i:${i + 1}" data-go="${esc(t.id)}">${art(t.id)}<span class="badge">${countdown(t) || '尚未排日期'}</span><button class="ed" data-edit="tw_trips:${esc(t.id)}" aria-label="編輯">✎</button>
         <div class="tb"><strong>${esc(t.name)}</strong><div class="sub">${range(t)}</div></div></div>`).join('')
-        : `<div class="empty">還沒有旅程，按右下角出發吧。</div>`) + add('tw_trips');
+        : `<div class="empty">還沒有旅程，按右下角出發吧。</div>`) + `<div class="ver">${verLine()}</div>` + add('tw_trips');
   },
   itinerary() {
     const days = tripDays(), undated = state.itinerary.some(r => !r.day);
@@ -1107,6 +1210,7 @@ function render() {
   document.body.className = TRIP ? '' : 'home';
   $('#back').hidden = $('#share').hidden = !TRIP;
   const t = curTrip();
+  applyPalette(TRIP ? paletteOf(t) : 'default');
   $('#ttl').textContent = TRIP ? (t?.name || '旅程') : '旅行手帳';
   document.title = TRIP ? (t?.name || '旅程') + ' · 旅行手帳' : '旅行手帳';
   $('#tabs').innerHTML = TRIP ? Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${v}</button>`).join('') : '';
@@ -1162,6 +1266,7 @@ document.addEventListener('change', e => {
   if (!canEdit()) { el.checked = !el.checked; return toast('離線中，目前只能查看'); }
   saveRow('check_items', { ...r, done: el.checked });
 });
+$('#dlg').addEventListener('close', () => applyPalette(TRIP ? paletteOf(curTrip()) : 'default'));
 $('#back').onclick = () => { location.href = location.pathname; };
 $('#share').onclick = async () => {
   const url = location.origin + location.pathname + '?trip=' + encodeURIComponent(TRIP);
@@ -1171,6 +1276,14 @@ addEventListener('online', loadAll);
 addEventListener('offline', () => { online = false; setSync(); });
 
 setSync(); render(); loadAll(); subscribe();
+
+/* ===== 離線開啟：Service Worker（需與 index.html 放在同一個資料夾，檔名 sw.js） ===== */
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.ready.then(() => { swReady = true; const v = $('.ver'); if (v) v.textContent = verLine(); }).catch(() => {});
+  });
+}
 </script>
 </body>
 </html>

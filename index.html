@@ -6,7 +6,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>旅行手帳</title>
-<meta name="app-version" content="1.7.0">
+<meta name="app-version" content="1.8.0">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{--bg:#f5f0de;--card:#fffdf4;--ink:#2b4a47;--mute:#6b8279;--sea:#3a86b8;--sky:#bfe0ef;--sun:#f2b84b;--leaf:#5e9e6e;--line:#d9d3b8;--bad:#c0563f;--onsun:#2b4a47;--onleaf:#fff;--btn:#16283f;--serif:"Hiragino Mincho ProN","Songti TC","Noto Serif TC",serif}
@@ -221,6 +221,8 @@ dialog:has(.itf){width:100%;max-width:none;margin:auto 0 0;border-radius:26px 26
 #qrov button{padding:14px 40px;border:0;border-radius:16px;background:var(--btn);color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
 .ver{margin:26px 0 90px;text-align:center;font-size:.72rem;color:var(--mute);opacity:.7;letter-spacing:.04em}
 #toast{position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:.9rem;display:none;z-index:20}
+.amtrow{display:grid;grid-template-columns:3fr 2fr;gap:10px}
+.amtrow label{margin-top:10px}
 /* 配色風格 */
 html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 38%,color-mix(in srgb,var(--sea) 34%,transparent))}
 .thg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
@@ -242,7 +244,7 @@ html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-event
 <div id="toast"></div>
 
 <script>
-const APP_VERSION = '1.7.0', APP_DATE = '2026-11-18';   // 每次修改請同步更新這裡與 CHANGELOG.md
+const APP_VERSION = '1.8.0', APP_DATE = '2026-11-18';   // 每次修改請同步更新這裡與 CHANGELOG.md
 /* ===== 設定：填入 Supabase 後即啟用雲端同步；留空則為本機模式 ===== */
 const CONFIG = {
   SUPABASE_URL: 'https://kadmtabkxzzytxyodbhf.supabase.co',
@@ -398,8 +400,13 @@ async function saveRow(t, row) {
       if (!r.error && r.data) { await saveTheme(); return loadAll(); }
     }
     const { theme, ...plain } = row;
-    const { error } = await sb.from(t).upsert(t === 'tw_trips' ? plain : { ...row, trip_id: TRIP });
-    if (error) toast('儲存失敗：' + error.message);
+    let { error } = await sb.from(t).upsert(t === 'tw_trips' ? plain : { ...row, trip_id: TRIP });
+    if (error && t === 'expenses' && /pay_method/.test(error.message || '')) {   // 資料庫還沒有付款方式欄位：先存其他內容
+      const { pay_method, ...rest } = row;
+      ({ error } = await sb.from(t).upsert({ ...rest, trip_id: TRIP }));
+      if (!error) toast('已儲存，但付款方式還沒同步（資料庫需新增 pay_method 欄位）');
+      else toast('儲存失敗：' + error.message);
+    } else if (error) toast('儲存失敗：' + error.message);
     else await saveTheme();
     return loadAll();
   }
@@ -473,10 +480,9 @@ function formHtml(t, row) {
   const opts = (arr, sel) => arr.map(([v, l]) => `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(l)}</option>`).join('');
   return `
     <label>項目</label><input name="title" required value="${esc(row.title)}">
-    <label>類別（點選或自行輸入）</label><input name="category" value="${esc(row.category)}" placeholder="例如：餐飲"><div class="chips">${ecats.map(c => `<button type="button" class="mini" data-catpick="${esc(c)}">${esc(c)}</button>`).join('')}</div>
-    <label>日期</label><input name="day" type="date" value="${esc(row.day || new Date().toISOString().slice(0, 10))}">
-    <label>金額</label><input name="amount" type="number" step="any" required value="${esc(row.amount)}">
-    <label>幣別</label><select name="currency" id="cur">${opts(Object.keys(DEFAULT_RATES).map(c => [c, c]), ccy)}</select>
+    <label>類別</label><select name="category"><option value="">選擇類別</option>${ecats.map(c => `<option value="${esc(c)}" ${c === row.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+    <div class="amtrow"><div><label>金額</label><input name="amount" type="number" inputmode="decimal" step="any" required value="${esc(row.amount)}"></div><div><label>幣別</label><select name="currency" id="cur">${opts(Object.keys(DEFAULT_RATES).map(c => [c, c]), ccy)}</select></div></div>
+    <label>付款方式</label><select name="pay_method">${PAY_METHODS.map(p => `<option value="${p}" ${p === (row.pay_method || '現金') ? 'selected' : ''}>${p}</option>`).join('')}</select>
     <label>匯率（1 單位 = 多少台幣）</label><input name="rate" id="rate" type="number" step="any" value="${rate}">
     <label>付款人（可複選，多人時平均分擔）</label><div class="chk">${state.members.map(m => `<label><input type="checkbox" name="payers" value="${m.id}" ${pays.includes(m.id) ? 'checked' : ''}>${esc(m.name)}</label>`).join('')}</div>
     <label>分攤成員</label><div class="chk">${state.members.map(m => `<label><input type="checkbox" name="split" value="${m.id}" ${split.includes(m.id) ? 'checked' : ''}>${esc(m.name)}</label>`).join('')}</div>
@@ -512,7 +518,7 @@ $('#frm').onsubmit = async e => {
   const row = { ...(existing || {}), ...vals, ...(existing ? {} : cur.extra || {}) };
   if (cur.t === 'tw_trips' && row.start_day && row.end_day && row.end_day < row.start_day) return toast('回程日不能早於出發日');
   if (cur.t === 'tw_trips') row.theme = (!row.theme || row.theme === 'default' || !PALETTES[row.theme]) ? null : row.theme;
-  if (cur.t === 'expenses') { row.payers = fd.getAll('payers'); if (!row.payers.length) return toast('請至少選擇一位付款人'); row.payer = row.payers[0]; row.split = fd.getAll('split'); row.amount = +row.amount; row.rate = +row.rate || 1; }
+  if (cur.t === 'expenses') { row.payers = fd.getAll('payers'); if (!row.payers.length) return toast('請至少選擇一位付款人'); row.payer = row.payers[0]; row.split = fd.getAll('split'); row.amount = +row.amount; row.rate = +row.rate || 1; row.day = row.day || new Date().toISOString().slice(0, 10); row.pay_method = row.pay_method || '現金'; }
   if (cur.t === 'itinerary') {
     row.title = (row.title || '').trim();
     row.place = vals.place !== undefined ? (vals.place || row.title) : row.title;     // 地點名稱同時用於地圖搜尋
@@ -931,6 +937,7 @@ const itineraryForm = row => {
 const catSelect = cid => `<label>類別</label><select name="cat_id"><option value="">未分類</option>${state.check_cats.filter(c => c.kind === 'restaurants').map(c => `<option value="${c.id}" ${c.id === cid ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>`;
 
 /* ===== 旅程首頁：依旅程名稱的主視覺、倒數、天氣 ===== */
+const PAY_METHODS = ['現金', '信用卡', '交通卡', '其它'];
 const EXP_CATS = ['交通', '住宿', '餐飲', '行程', '雜支', '禮品', '其它'];
 const payersOf = e => e.payers?.length ? e.payers : (e.payer ? [e.payer] : []);
 const payNames = e => payersOf(e).map(mname).join('、') || '—';
@@ -1200,7 +1207,7 @@ const views = {
       <h3>每人結算</h3><table><tr><th></th><th>已付</th><th>應分攤</th><th>差額</th></tr>
       ${state.members.map(m => { const b = bal[m.id], n = b.paid - b.share; return `<tr><td>${esc(m.name)}</td><td>${Math.round(b.paid).toLocaleString()}</td><td>${Math.round(b.share).toLocaleString()}</td><td class="${n >= 0 ? 'pos' : 'neg'}">${n >= 0 ? '+' : ''}${Math.round(n).toLocaleString()}</td></tr>`; }).join('')}</table>
       <h3>建議還款</h3>${pay.length ? pay.map(p => `<div class="row"><span>${esc(mname(p[0]))} → ${esc(mname(p[1]))}</span><span class="amt">${nt(p[2])}</span></div>`).join('') : '<div class="sub">目前沒有需要還款的人。</div>'}
-      <h3>支出紀錄</h3>${ex.map(e => `<div class="row" data-edit="expenses:${e.id}"><div><strong>${esc(e.title)}</strong><div class="sub">${e.category ? `<span class="tag">${esc(e.category)}</span> ` : ''}${fmtDay(e.day)} · ${esc(payNames(e))} 付 · ${(e.split?.length || state.members.length)} 人分攤</div>${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}</div>
+      <h3>支出紀錄</h3>${ex.map(e => `<div class="row" data-edit="expenses:${e.id}"><div><strong>${esc(e.title)}</strong><div class="sub">${e.category ? `<span class="tag">${esc(e.category)}</span> ` : ''}${e.pay_method ? `<span class="tag">${esc(e.pay_method)}</span> ` : ''}${fmtDay(e.day)} · ${esc(payNames(e))} 付 · ${(e.split?.length || state.members.length)} 人分攤</div>${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}</div>
         <div class="amt">${Number(e.amount).toLocaleString()} ${esc(e.currency)}${e.currency !== 'TWD' ? `<div class="sub">≈ ${nt(twd(e))}</div>` : ''}</div></div>`).join('')}` + add('expenses');
   }
 };

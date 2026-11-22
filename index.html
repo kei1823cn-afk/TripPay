@@ -6,7 +6,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>旅行手帳</title>
-<meta name="app-version" content="2.0.0">
+<meta name="app-version" content="2.0.1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{--bg:#f5f0de;--card:#fffdf4;--ink:#2b4a47;--mute:#6b8279;--sea:#3a86b8;--sky:#bfe0ef;--sun:#f2b84b;--leaf:#5e9e6e;--line:#d9d3b8;--bad:#c0563f;--onsun:#2b4a47;--onleaf:#fff;--btn:#16283f;--serif:"Hiragino Mincho ProN","Songti TC","Noto Serif TC",serif}
@@ -242,6 +242,8 @@ html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-event
 .rst{background:var(--bg);border-radius:12px;padding:10px 4px;text-align:center}
 .rst b{display:block;font:800 1.1rem var(--serif)}
 .rst span{font-size:.75rem;color:var(--mute)}
+.tfg{display:flex;gap:8px;margin:8px 0}
+.tfg span{flex:1;background:var(--card);border-radius:10px;padding:6px 10px;font-weight:700}
 </style>
 </head>
 <body>
@@ -253,7 +255,7 @@ html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-event
 <div id="toast"></div>
 
 <script>
-const APP_VERSION = '2.0.0', APP_DATE = '2026-11-21';   // 每次修改請同步更新這裡與 CHANGELOG.md
+const APP_VERSION = '2.0.1', APP_DATE = '2026-11-21';   // 每次修改請同步更新這裡與 CHANGELOG.md
 /* ===== 設定：填入 Supabase 後即啟用雲端同步；留空則為本機模式 ===== */
 const CONFIG = {
   SUPABASE_URL: 'https://kadmtabkxzzytxyodbhf.supabase.co',
@@ -439,6 +441,10 @@ async function saveRow(t, row) {
       ({ error } = await sb.from(t).upsert({ ...rest, trip_id: TRIP }));
       if (!error) toast('已儲存，但付款方式還沒同步（資料庫需新增 pay_method 欄位）');
       else toast('儲存失敗：' + error.message);
+    } else if (error && t === 'flights' && /counter|gate/.test(error.message || '')) {
+      const { counter, gate, ...rest } = row;
+      ({ error } = await sb.from(t).upsert({ ...rest, trip_id: TRIP }));
+      toast(error ? '儲存失敗：' + error.message : (counter || gate) ? '已儲存，但報到櫃檯與登機門還沒同步（資料庫需新增 counter、gate 欄位）' : '已儲存');
     } else if (error) toast('儲存失敗：' + error.message);
     else await saveTheme();
     return loadAll();
@@ -486,7 +492,7 @@ async function subscribe() {
 const FORMS = {
   tw_trips:  { title: '旅程', fields: [['name','text','旅程名稱（例如：東京五日）'],['start_day','date','出發日'],['end_day','date','回程日']] },
   itinerary: { title: '行程', fields: [['day','date','日期'],['time','time','預計時間'],['title','text','地點名稱'],['place','text','地點'],['note','textarea','備註']] },
-  flights:   { title: '航班', fields: [['dep_airport','text','出發機場'],['arr_airport','text','抵達機場'],['dep_time','datetime-local','起飛時間（當地）'],['arr_time','datetime-local','抵達時間（當地）'],['booking_ref','text','訂位代號'],['note','textarea','備註（行李、座位…）']] },
+  flights:   { title: '航班', fields: [['dep_airport','text','出發機場'],['arr_airport','text','抵達機場'],['dep_time','datetime-local','起飛時間（當地）'],['arr_time','datetime-local','抵達時間（當地）'],['booking_ref','text','訂位代號'],['counter','text','報到櫃檯（到機場後填，例如 B 區 12–18）'],['gate','text','登機門（例如 B3）'],['note','textarea','備註（行李、座位…）']] },
   lodging:   { title: '住宿', fields: [['name','text','住宿名稱'],['address','text','地址'],['check_in','date','入住日'],['check_out','date','退房日'],['booking_ref','text','訂房編號'],['url','url','訂房或地圖連結'],['note','textarea','備註（入住時間、設備…）']] },
   info:      { title: '資訊', fields: [['category','text','分類（可自行輸入）'],['title','text','標題'],['content','textarea','內容']] },
   members:   { title: '成員', fields: [['name','text','名稱']] },
@@ -678,6 +684,7 @@ async function rmFile(id) {
 function flightForm(row) {
   return `<label>航班編號</label><input name="flight_no" required placeholder="例如 BR198" value="${esc(row.flight_no)}">
     <label>日期（起飛當地日期）</label><input name="flight_date" type="date" required value="${esc(row.flight_date || '')}">
+    <label>去程／回程</label><select name="leg">${[['out', '去程'], ['in', '回程']].map(([v, l]) => `<option value="${v}" ${v === (row.leg || cur?.extra?.leg || 'out') ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <div class="btns"><button type="button" id="lookup">自動查詢起降資料</button></div><div class="sub" id="lkst">只填航班編號和日期，儲存時會自動帶入。</div>
     <details ${row.dep_airport ? 'open' : ''}><summary>起降資訊（可手動修改或補充）</summary>${FORMS.flights.fields.map(f => fieldHtml(f, row[f[0]])).join('')}</details>`;
 }
@@ -1136,7 +1143,7 @@ const views = {
     return `<div class="inleg"><div class="ilh"><b>${title}</b><button class="mini" data-add="flights" data-leg="${leg}">＋ 航班</button></div>` +
       (fl.length ? fl.map(f => `<div class="fl" data-edit="flights:${f.id}"><div class="route">${esc(apZh(f.dep_airport) || '—')}<span>✈</span>${esc(apZh(f.arr_airport) || '—')}</div>
         <div class="sub">${esc(f.flight_no || '')}${f.flight_date ? ' · ' + fmtDay(f.flight_date) : ''}${f.booking_ref ? ' · 訂位 ' + esc(f.booking_ref) : ''}</div>
-        <div class="sub">${fmtDT(f.dep_time)} → ${fmtDT(f.arr_time)}</div>${f.note ? `<p class="note">${esc(f.note)}</p>` : ''}</div>`).join('') : `<div class="empty small">還沒有${title}航班</div>`) + `</div>`;
+        <div class="sub">${fmtDT(f.dep_time)} → ${fmtDT(f.arr_time)}</div>${f.counter || f.gate ? `<div class="sub">${f.counter ? '報到 ' + esc(f.counter) : ''}${f.counter && f.gate ? ' · ' : ''}${f.gate ? '登機門 ' + esc(f.gate) : ''}</div>` : ''}${f.note ? `<p class="note">${esc(f.note)}</p>` : ''}</div>`).join('') : `<div class="empty small">還沒有${title}航班</div>`) + `</div>`;
   },
   weather() {
     const t = curTrip(), live = !!wxLive, place = live ? '' : t?.weather_place, ok = wx.key === wxKey(t);
@@ -1247,12 +1254,12 @@ const views = {
 
 /* ===== v2.0：智慧匯入、今日模式、旅行回顧 ===== */
 const IMP_PROMPT = `請把以下內容整理成 JSON，只輸出 JSON，不要多餘文字：
-{"flights":[{"flight_no":"","date":"YYYY-MM-DD","booking_no":""}],
+{"flights":[{"flight_no":"","date":"YYYY-MM-DD","leg":"out|in","booking_no":""}],
 "lodging":[{"name":"","address":"","checkin":"YYYY-MM-DD","checkout":"YYYY-MM-DD","booking_no":"","url":"","note":""}],
 "itinerary":[{"date":"YYYY-MM-DD","time":"HH:MM","category":"交通|景點|美食|購物","place":"","note":""}],
 "restaurants":[{"name":"","map_url":"","note":""}],
 "notes":[{"title":"","content":""}]}
-看不出來的欄位留空字串，不要猜；沒有的類別給空陣列。`;
+看不出來的欄位留空字串，不要猜；航班的 leg：去程填 out、回程填 in；沒有的類別給空陣列。`;
 const IMP_G = { flights: ['✈️', '航班'], lodging: ['🏨', '住宿'], itinerary: ['🗓️', '行程'], restaurants: ['🍜', '餐廳'], notes: ['📝', '備忘'] };
 let impItems = [];
 function impParse(txt) {
@@ -1262,7 +1269,15 @@ function impParse(txt) {
   const S = v => String(v ?? '').trim() || null, D = v => /^\d{4}-\d{2}-\d{2}/.test(v || '') ? v.slice(0, 10) : null;
   const T = v => { const m = /(\d{1,2}):(\d{2})/.exec(v || ''); return m ? String(m[1]).padStart(2, '0') + ':' + m[2] : null; };
   const U = v => /^https?:\/\//.test(v || '') ? v : null;
-  (j.flights || []).forEach(x => { const no = (S(x.flight_no) || '').toUpperCase().replace(/\s+/g, ''), d = D(x.date); if (no && d) out.push({ k: 'flights', row: { flight_no: no, flight_date: d, leg: x.leg === 'in' || x.leg === 'out' ? x.leg : (t?.end_day === d && t?.start_day !== d ? 'in' : 'out'), booking_ref: S(x.booking_no) } }); });
+  (j.flights || []).forEach(x => {
+    const no = (S(x.flight_no) || '').toUpperCase().replace(/\s+/g, ''), d = D(x.date); if (!no || !d) return;
+    let leg = x.leg === 'in' || x.leg === 'out' ? x.leg : null;
+    if (!leg && t?.start_day && t?.end_day && t.start_day !== t.end_day) { const ds = Math.abs(new Date(d) - new Date(t.start_day)), de = Math.abs(new Date(d) - new Date(t.end_day)); if (ds !== de) leg = de < ds ? 'in' : 'out'; }
+    out.push({ k: 'flights', row: { flight_no: no, flight_date: d, leg, booking_ref: S(x.booking_no) } });
+  });
+  { const all = out.filter(o => o.k === 'flights'), un = all.filter(o => !o.row.leg).sort((a, b) => a.row.flight_date.localeCompare(b.row.flight_date));
+    const hasOut = all.some(o => o.row.leg === 'out') || state.flights.some(f => (f.leg || 'out') === 'out'), hasIn = all.some(o => o.row.leg === 'in') || state.flights.some(f => f.leg === 'in');
+    un.forEach((o, i) => o.row.leg = un.length === 1 ? (hasOut && !hasIn ? 'in' : 'out') : (i >= Math.ceil(un.length / 2) ? 'in' : 'out')); }
   (j.lodging || []).forEach(x => { if (S(x.name)) out.push({ k: 'lodging', row: { name: S(x.name), address: S(x.address), check_in: D(x.checkin), check_out: D(x.checkout), booking_ref: S(x.booking_no), url: U(x.url), note: S(x.note) } }); });
   (j.itinerary || []).forEach(x => { const ti = S(x.title) || S(x.place); if (ti) out.push({ k: 'itinerary', row: { day: D(x.date), time: T(x.time), title: ti, place: S(x.place) || ti, note: S(x.note), category: IT_CATS.includes(x.category) ? x.category : '景點' } }); });
   (j.restaurants || []).forEach(x => { const nm = S(x.name) || (U(x.map_url) && mapName(x.map_url)); if (nm) out.push({ k: 'restaurants', row: { name: nm, map_url: U(x.map_url), note: S(x.note), cat_id: null } }); });
@@ -1348,8 +1363,17 @@ function todayCard(t) {
   if (!t?.start_day || today < t.start_day || today > (t.end_day || t.start_day)) return '';
   const n = Math.round((new Date(today + 'T00:00') - new Date(t.start_day + 'T00:00')) / 864e5) + 1, rows = dayRows(today), now = nowMin();
   const left = rows.filter(r => { const e = doneAt(r); return e == null || e >= now; }), nx = left[0];
+  const tm = x => fromMin(((x % 1440) + 1440) % 1440);
+  const fh = state.flights.filter(f => (f.dep_time || f.flight_date || '').slice(0, 10) === today).sort((a, b) => (a.dep_time || '').localeCompare(b.dep_time || '')).map(f => {
+    const dt = (f.dep_time || '').length >= 16 ? f.dep_time.slice(11, 16) : null, dm = dt ? toMin(dt) : null;
+    return `<div class="inleg"><div class="route" style="font-size:1.05rem">✈ ${esc(apZh(f.dep_airport) || '—')}<span>→</span>${esc(apZh(f.arr_airport) || '—')}</div>
+      <div class="sub">${esc(f.flight_no || '')} · 起飛 ${dt || '—'}${(f.arr_time || '').length >= 16 ? ' → 抵達 ' + f.arr_time.slice(11, 16) : ''}${f.booking_ref ? ' · 訂位 ' + esc(f.booking_ref) : ''}</div>
+      <div class="tfg"><span><small class="sub">報到櫃檯</small><br>${esc(f.counter || '尚未填')}</span><span><small class="sub">登機門</small><br>${esc(f.gate || '尚未填')}</span></div>
+      ${dm != null ? `<div class="sub">參考：建議 ${tm(dm - 180)} 前抵達機場；報到櫃檯通常起飛前約 60 分截止（${tm(dm - 60)}）；登機門通常起飛前約 40 分關閉（${tm(dm - 40)}），實際以航空公司公告為準。</div>` : ''}
+      <div class="chips"><a class="tag" target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent((f.flight_no || '') + ' 航班動態')}">🔎 查即時動態</a><button type="button" class="mini" data-edit="flights:${f.id}">填櫃檯／登機門</button></div></div>`;
+  }).join('');
   let b;
-  if (!rows.length) b = '<div class="empty small">今天還沒有安排行程。</div>';
+  if (!rows.length) b = fh ? '' : '<div class="empty small">今天還沒有安排行程。</div>';
   else if (!nx) b = '<div class="empty small">今天的行程都完成了 🎉</div>';
   else {
     const st = toMin(nx.time), diff = st != null ? st - now : null, q = rawPlace(nx);
@@ -1358,7 +1382,7 @@ function todayCard(t) {
       ${q ? `<a class="tnav" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}">➤ 導航到這裡</a>` : ''}`;
     if (left.length > 1) b += `<div class="sub" style="margin-top:8px">之後還有：${left.slice(1, 3).map(r => esc((r.time || '') + ' ' + r.title)).join('、')}${left.length > 3 ? ' …' : ''}</div>`;
   }
-  return `<div class="legcard"><h2>📍 今天 · 第 ${n} 天<button class="mini" data-todayopen>全部行程</button></h2>${b}</div>`;
+  return `<div class="legcard"><h2>📍 今天 · 第 ${n} 天<button class="mini" data-todayopen>全部行程</button></h2>${fh}${b}</div>`;
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && TRIP && tab === 'trip' && !wxEdit && !document.querySelector('dialog[open]')) render(); });
 views.recap = () => {

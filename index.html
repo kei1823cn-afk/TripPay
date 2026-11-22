@@ -6,7 +6,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>旅行手帳</title>
-<meta name="app-version" content="2.0.1">
+<meta name="app-version" content="2.1.0">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{--bg:#f5f0de;--card:#fffdf4;--ink:#2b4a47;--mute:#6b8279;--sea:#3a86b8;--sky:#bfe0ef;--sun:#f2b84b;--leaf:#5e9e6e;--line:#d9d3b8;--bad:#c0563f;--onsun:#2b4a47;--onleaf:#fff;--btn:#16283f;--serif:"Hiragino Mincho ProN","Songti TC","Noto Serif TC",serif}
@@ -255,7 +255,7 @@ html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-event
 <div id="toast"></div>
 
 <script>
-const APP_VERSION = '2.0.1', APP_DATE = '2026-11-21';   // 每次修改請同步更新這裡與 CHANGELOG.md
+const APP_VERSION = '2.1.0', APP_DATE = '2026-11-22';   // 每次修改請同步更新這裡與 CHANGELOG.md
 /* ===== 設定：填入 Supabase 後即啟用雲端同步；留空則為本機模式 ===== */
 const CONFIG = {
   SUPABASE_URL: 'https://kadmtabkxzzytxyodbhf.supabase.co',
@@ -1356,6 +1356,25 @@ $('#imp').addEventListener('click', async e => {
     await saveRow('info', ex ? { ...ex, content: txt } : { id: crypto.randomUUID(), category: '旅行日誌', title: d.jsave, content: txt });
   }
 });
+const fids = {};
+const TW_AP = ['TPE', 'TSA', 'KHH', 'RMQ', 'TNN', 'CYI', 'HUN', 'TTT', 'MZG', 'KNH'];
+async function fidsUpdate(id) {                          // 透過 Edge Function「tdx」查台灣機場即時航班（TDX）
+  const f = state.flights.find(x => x.id === id); if (!f) return;
+  if (!sb) return toast('本機模式無法查詢');
+  if (!navigator.onLine) return toast('離線中，無法更新');
+  const dep = iataOf(f.dep_airport), arr = iataOf(f.arr_airport), kind = TW_AP.includes(dep) ? 'dep' : TW_AP.includes(arr) ? 'arr' : null;
+  if (!kind) return toast('這班航班的起降都不在台灣機場，TDX 沒有資料');
+  toast('查詢中…');
+  try {
+    const { data, error } = await sb.functions.invoke('tdx', { body: { no: (f.flight_no || '').toUpperCase(), date: (f.dep_time || f.flight_date || '').slice(0, 10), airport: kind === 'dep' ? dep : arr, kind } });
+    if (error || !data) return toast('查詢功能沒有回應（請確認 tdx 函式已部署）');
+    if (data.error) return toast(data.error === 'no_secret' ? 'TDX 金鑰還沒設定' : data.error === 'not_found' ? '清單裡找不到這班（通常只提供前後一天內的航班）' : '查詢失敗：' + data.error);
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    fids[id] = { ...data, at: `${p(d.getHours())}:${p(d.getMinutes())}` };
+    const counter = data.counter || f.counter || null, gate = data.gate || f.gate || null;
+    if (kind === 'dep' && (counter !== (f.counter || null) || gate !== (f.gate || null))) await saveRow('flights', { ...f, counter, gate }); else render();
+  } catch (e) { toast('查詢失敗，請稍後再試'); }
+}
 const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 const doneAt = r => endMin(r) ?? (toMin(r?.time) != null ? toMin(r.time) + 60 : null);   // 沒有結束時間就當作一小時
 function todayCard(t) {
@@ -1365,12 +1384,13 @@ function todayCard(t) {
   const left = rows.filter(r => { const e = doneAt(r); return e == null || e >= now; }), nx = left[0];
   const tm = x => fromMin(((x % 1440) + 1440) % 1440);
   const fh = state.flights.filter(f => (f.dep_time || f.flight_date || '').slice(0, 10) === today).sort((a, b) => (a.dep_time || '').localeCompare(b.dep_time || '')).map(f => {
-    const dt = (f.dep_time || '').length >= 16 ? f.dep_time.slice(11, 16) : null, dm = dt ? toMin(dt) : null;
+    const L = fids[f.id] || {}, dt = (f.dep_time || '').length >= 16 ? f.dep_time.slice(11, 16) : null, dm = dt ? toMin(dt) : null;
     return `<div class="inleg"><div class="route" style="font-size:1.05rem">✈ ${esc(apZh(f.dep_airport) || '—')}<span>→</span>${esc(apZh(f.arr_airport) || '—')}</div>
       <div class="sub">${esc(f.flight_no || '')} · 起飛 ${dt || '—'}${(f.arr_time || '').length >= 16 ? ' → 抵達 ' + f.arr_time.slice(11, 16) : ''}${f.booking_ref ? ' · 訂位 ' + esc(f.booking_ref) : ''}</div>
-      <div class="tfg"><span><small class="sub">報到櫃檯</small><br>${esc(f.counter || '尚未填')}</span><span><small class="sub">登機門</small><br>${esc(f.gate || '尚未填')}</span></div>
+      <div class="tfg"><span><small class="sub">報到櫃檯</small><br>${esc(L.counter || f.counter || '尚未填')}</span><span><small class="sub">登機門</small><br>${esc(L.gate || f.gate || '尚未填')}</span></div>
+      ${L.at ? `<div class="sub">📡 ${[L.status, L.terminal && '航廈 ' + L.terminal, L.est && '預估 ' + L.est.slice(11, 16), L.act && '實際 ' + L.act.slice(11, 16), L.baggage && '行李轉盤 ' + L.baggage].filter(Boolean).map(esc).join(' · ') || '已更新，來源尚無更多資料'}（${L.at} 更新）</div>` : ''}
       ${dm != null ? `<div class="sub">參考：建議 ${tm(dm - 180)} 前抵達機場；報到櫃檯通常起飛前約 60 分截止（${tm(dm - 60)}）；登機門通常起飛前約 40 分關閉（${tm(dm - 40)}），實際以航空公司公告為準。</div>` : ''}
-      <div class="chips"><a class="tag" target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent((f.flight_no || '') + ' 航班動態')}">🔎 查即時動態</a><button type="button" class="mini" data-edit="flights:${f.id}">填櫃檯／登機門</button></div></div>`;
+      <div class="chips"><button type="button" class="mini" data-fids="${f.id}">📡 更新航班動態</button><a class="tag" target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent((f.flight_no || '') + ' 航班動態')}">🔎 查即時動態</a><button type="button" class="mini" data-edit="flights:${f.id}">填櫃檯／登機門</button></div></div>`;
   }).join('');
   let b;
   if (!rows.length) b = fh ? '' : '<div class="empty small">今天還沒有安排行程。</div>';
@@ -1418,7 +1438,7 @@ function render() {
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-fold],[data-foldall],[data-qrpick],[data-qrshow],[data-qrclose],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join],[data-impopen],[data-todayopen],[data-journal]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-fold],[data-foldall],[data-qrpick],[data-qrshow],[data-qrclose],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join],[data-impopen],[data-todayopen],[data-journal],[data-fids]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
   else if ('day' in el.dataset) { selDay = el.dataset.day; openLeg = null; render(); }
   else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
@@ -1430,6 +1450,7 @@ document.addEventListener('click', e => {
   else if ('impopen' in el.dataset) openImport();
   else if ('todayopen' in el.dataset) { tab = 'itinerary'; selDay = ymd(new Date()); openLeg = null; fresh = true; render(); scrollTo(0, 0); }
   else if (el.dataset.journal) openJournal(el.dataset.journal);
+  else if (el.dataset.fids) fidsUpdate(el.dataset.fids);
   else if ('qrpick' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); $('#qr-' + el.dataset.qrpick)?.click(); }
   else if ('qrshow' in el.dataset) showQR(el.dataset.qrshow);
   else if ('qrclose' in el.dataset) closeQR();

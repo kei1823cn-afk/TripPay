@@ -6,7 +6,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>旅行手帳</title>
-<meta name="app-version" content="2.1.0">
+<meta name="app-version" content="2.5.0">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{--bg:#f5f0de;--card:#fffdf4;--ink:#2b4a47;--mute:#6b8279;--sea:#3a86b8;--sky:#bfe0ef;--sun:#f2b84b;--leaf:#5e9e6e;--line:#d9d3b8;--bad:#c0563f;--onsun:#2b4a47;--onleaf:#fff;--btn:#16283f;--serif:"Hiragino Mincho ProN","Songti TC","Noto Serif TC",serif}
@@ -242,6 +242,16 @@ html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-event
 .rst{background:var(--bg);border-radius:12px;padding:10px 4px;text-align:center}
 .rst b{display:block;font:800 1.1rem var(--serif)}
 .rst span{font-size:.75rem;color:var(--mute)}
+#login{position:fixed;inset:0;z-index:3000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+#login form{width:min(360px,100%);display:flex;flex-direction:column;gap:12px;background:var(--card);padding:26px 22px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+#login h2{margin:0;justify-content:center}#login h2::before{display:none}
+#login input{padding:13px 14px;border-radius:14px;font-size:1.05rem}
+#login button{padding:14px;border:0;border-radius:14px;background:var(--btn);color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
+.callb{flex:0 0 auto;padding:10px 14px;border-radius:12px;background:var(--btn);color:#fff;font-weight:700;text-decoration:none;white-space:nowrap}
+#phov{position:fixed;inset:0;z-index:2000;background:#fff;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:calc(24px + env(safe-area-inset-top,0px)) 24px calc(24px + env(safe-area-inset-bottom,0px));text-align:center}
+#phov .big{font:800 2.3rem/1.4 sans-serif;word-break:break-word}
+#phov .zh{color:#666;font-size:1.1rem}
+#phov button{padding:14px 40px;border:0;border-radius:16px;background:#16283f;color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
 .tfg{display:flex;gap:8px;margin:8px 0}
 .tfg span{flex:1;background:var(--card);border-radius:10px;padding:6px 10px;font-weight:700}
 </style>
@@ -255,7 +265,7 @@ html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-event
 <div id="toast"></div>
 
 <script>
-const APP_VERSION = '2.1.0', APP_DATE = '2026-11-22';   // 每次修改請同步更新這裡與 CHANGELOG.md
+const APP_VERSION = '2.5.0', APP_DATE = '2026-11-23';   // 每次修改請同步更新這裡與 CHANGELOG.md
 /* ===== 設定：填入 Supabase 後即啟用雲端同步；留空則為本機模式 ===== */
 const CONFIG = {
   SUPABASE_URL: 'https://kadmtabkxzzytxyodbhf.supabase.co',
@@ -353,13 +363,31 @@ const KEY = 'tw:data:' + TRIP;
 const CONFIGURED = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_KEY);
 const sb = (CONFIGURED && window.supabase) ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
 let authMsg = '';
-const ready = sb ? (async () => {       // 不需要使用者登入：每支裝置自動取得匿名身分，再用旅程代碼加入旅程
-  try {
-    const { data } = await sb.auth.getSession();
-    if (!data.session) { const r = await sb.auth.signInAnonymously(); if (r.error) { authMsg = r.error.message; return; } }
-    if (TRIP) await sb.rpc('join_trip', { p_code: TRIP });
-  } catch (e) { authMsg = String(e); }
-})() : Promise.resolve();
+let loginP = null;       // 登入：Email＋密碼（帳號由管理者在 Supabase 後台建立，不開放註冊）；登入後 iPhone 可用 Face ID 自動填入
+function loginPrompt() {
+  return loginP ||= new Promise(res => {
+    document.body.insertAdjacentHTML('beforeend', `<div id="login"><form id="lgf"><h2>旅行手帳</h2><div class="sub" style="text-align:center">請登入</div>
+      <input type="email" name="email" autocomplete="username" autocapitalize="none" inputmode="email" placeholder="Email" required>
+      <input type="password" name="password" autocomplete="current-password" placeholder="密碼" required>
+      <div class="warn" id="lgerr"></div><button>登入</button></form></div>`);
+    $('#lgf').onsubmit = async e => {
+      e.preventDefault(); const f = new FormData(e.target), b = e.submitter; b.disabled = true;
+      let error; try { ({ error } = await sb.auth.signInWithPassword({ email: String(f.get('email')).trim(), password: String(f.get('password')) })); } catch (x) { error = x; }
+      b.disabled = false;
+      if (error) { $('#lgerr').textContent = '登入失敗：' + (/invalid login/i.test(error.message || '') ? '帳號或密碼不正確' : (error.message || '請確認網路')); return; }
+      $('#login').remove(); loginP = null; res();
+    };
+  });
+}
+async function ensureSession() {
+  if (!sb) return true;
+  const { data } = await sb.auth.getSession();
+  if (data.session) return true;
+  if (!navigator.onLine) return false;                 // 沒網路又沒登入：先用手機裡的備份資料唯讀
+  await loginPrompt(); return true;
+}
+const ready = sb ? (async () => { try { await ensureSession(); } catch (e) { authMsg = String(e); } })() : Promise.resolve();
+if (sb) sb.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT') ensureSession().then(() => loadAll()).catch(() => {}); });
 let online = false, tab = 'trip', wxEdit = false, selDay = null, saving = false, infoTab = 'restaurants', openLeg = null;
 let trips = JSON.parse(localStorage.getItem('tw:trips') || '[]');
 let state = { itinerary: [], flights: [], lodging: [], info: [], members: [], expenses: [], restaurants: [], check_cats: [], check_items: [], tw_files: [], reminders: [] };
@@ -378,6 +406,7 @@ let swReady = false;
 function verLine() {
   let s = `旅行手帳 v${APP_VERSION} · ${APP_DATE}`;
   if (swReady) s += ' · 離線可開啟';
+  if (fcCount) s += ' · 附件已備份 ' + fcCount + ' 個';
   const ts = +(localStorage.getItem('tw:synced') || 0);
   if (ts) { const d = new Date(ts), p = n => String(n).padStart(2, '0'); s += ` · 上次同步 ${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
   return s;
@@ -387,7 +416,7 @@ function setSync() { const s = $('#sync'); s.textContent = !CONFIGURED ? '本機
 /* ===== 資料層 ===== */
 async function loadAll() {
   if (sb) {
-    await ready;
+    await ready; try { await ensureSession(); } catch (e) {}
     try {
       const tr = await sb.from('tw_trips').select('*'); if (tr.error) throw tr.error;
       trips = tr.data;
@@ -397,6 +426,7 @@ async function loadAll() {
       }
       await signFiles();
       online = true;
+      if (TRIP) cacheFilesFor(state.tw_files, TRIP);
       try { localStorage.setItem('tw:synced', String(Date.now())); } catch (e) {}
     } catch (e) { online = false; }
   }
@@ -418,7 +448,9 @@ async function cacheAllTrips() {   // 在首頁連網時，順便把每一趟旅
       if (res.some(r => r.error)) continue;
       const st = {}; res.forEach((r, i) => { st[TABLES[i]] = r.data; });
       try { localStorage.setItem('tw:data:' + t.id, JSON.stringify(st)); } catch (e) { break; }   // 空間不足就停止
+      await cacheFilesFor(st.tw_files || [], t.id);
     }
+    await fcPrune(trips.map(t => t.id));
     localStorage.setItem('tw:cacheall', String(Date.now()));
   } catch (e) {} finally { cacheAllTrips.busy = false; }
 }
@@ -531,7 +563,7 @@ let cur = null;
 function openForm(t, id, extra = {}) {
   if (!canEdit()) return toast('離線中，目前只能查看');
   if (t === 'expenses' && !state.members.length) return toast('請先到「成員」新增成員');
-  const row = id ? (t === 'tw_trips' ? trips : state[t]).find(r => r.id === id) : (t === 'itinerary' ? { day: selDay || curTrip()?.start_day } : t === 'flights' ? { flight_date: extra.leg === 'in' ? curTrip()?.end_day : curTrip()?.start_day } : t === 'restaurants' ? { cat_id: extra.cat_id } : {});
+  const row = id ? (t === 'tw_trips' ? trips : state[t]).find(r => r.id === id) : (t === 'itinerary' ? { day: selDay || curTrip()?.start_day } : t === 'flights' ? { flight_date: extra.leg === 'in' ? curTrip()?.end_day : curTrip()?.start_day } : t === 'restaurants' ? { cat_id: extra.cat_id } : t === 'info' && extra.category ? { category: extra.category } : {});
   cur = { t, id, extra, newId: id || (t === 'tw_trips' ? shortId() : crypto.randomUUID()) };
   $('#frm').innerHTML = t === 'itinerary'
     ? `<div class="itf"><div class="hd"><h3>${id ? '編輯行程景點' : '新增行程景點'}</h3><button type="button" class="xb" id="cancel" aria-label="關閉">✕</button></div>${formHtml(t, row)}<button class="submit">${id ? '儲存變更' : '加入行程表'}</button>${id ? '<button type="button" class="delbtn" id="del">刪除這個行程</button>' : ''}</div>`
@@ -634,7 +666,7 @@ const link = u => /^https?:\/\//.test(u || '') ? `<a href="${esc(u)}" target="_b
 /* ===== 附件、航班查詢、地圖連結 ===== */
 const ATT = new Set(['restaurants', 'check_items']);
 const signed = {};
-const fileUrl = p => signed[p] || `${CONFIG.SUPABASE_URL}/storage/v1/object/public/tw-files/${p}`;
+const fileUrl = p => fileBlobUrl[p] || signed[p] || `${CONFIG.SUPABASE_URL}/storage/v1/object/public/tw-files/${p}`;
 async function signFiles() {
   if (!sb) return;
   const ps = state.tw_files.map(f => f.path).filter(p => !signed[p]); if (!ps.length) return;
@@ -670,6 +702,7 @@ async function uploadFiles(owner_table, owner_id, files) {
     const path = `${TRIP}/${owner_id}/${crypto.randomUUID()}.${ext}`;
     const { error } = await sb.storage.from('tw-files').upload(path, blob, { contentType: mime });
     if (error) { toast('上傳失敗：' + error.message); continue; }
+    fcPut(path, blob, mime);
     await sb.from('tw_files').insert({ id: crypto.randomUUID(), trip_id: TRIP, owner_table, owner_id, name, path, mime, size: blob.size });
   }
 }
@@ -677,7 +710,7 @@ async function rmFile(id) {
   const f = state.tw_files.find(x => x.id === id);
   if (!f || !canEdit() || !confirm('刪除這個附件？')) return;
   if (sb) { await sb.storage.from('tw-files').remove([f.path]); await sb.from('tw_files').delete().eq('id', id); }
-  state.tw_files = state.tw_files.filter(x => x.id !== id); persist();
+  state.tw_files = state.tw_files.filter(x => x.id !== id); persist(); fcDel(f.path);
   const tr = f.owner_table === 'transport', box = $(tr ? '#tflist' : '#flist'); if (box) box.innerHTML = filesHtml(f.owner_id, tr ? 'transport' : undefined);
   render();
 }
@@ -877,7 +910,7 @@ document.addEventListener('change', e => {
   const el = e.target.closest?.('[data-qrfile]'); if (!el) return;
   const f = el.files && el.files[0]; el.value = ''; addVoucher(f);
 });
-const SUBS = [['restaurants', '餐廳'], ['todo', '待辦事項'], ['prep', '行前準備'], ['docs', '旅行文件'], ['notes', '備忘']];
+const SUBS = [['restaurants', '餐廳'], ['todo', '待辦事項'], ['prep', '行前準備'], ['docs', '旅行文件'], ['notes', '備忘'], ['safety', '緊急']];
 const PRESETS = { restaurants: ['早餐', '午餐', '晚餐', '咖啡甜點', '小吃宵夜'], todo: ['出發前', '旅途中'], prep: ['證件與機票', '衣物', '電子用品', '藥品盥洗'], docs: ['護照與簽證', '機票與住宿憑證', '保險'] };
 
 /* ===== 行程之間的交通 ===== */
@@ -1113,7 +1146,7 @@ function tripDays() {          // 旅程出發日～回程日自動展開，再�
 const views = {
   home() {
     const rows = [...trips].sort((a, b) => (a.start_day || '9').localeCompare(b.start_day || '9'));
-    return `<div class="hero big">${scene('big')}<div class="hl"><h1>旅行手帳</h1><p>今天，要去哪裡呢？</p></div></div><div class="catbar"><button class="mini" data-join>🔗 用代碼或連結加入旅程</button></div>` +
+    return `<div class="hero big">${scene('big')}<div class="hl"><h1>旅行手帳</h1><p>今天，要去哪裡呢？</p></div></div><div class="catbar"><button class="mini" data-join>🔗 用代碼或連結加入旅程</button>${sb ? '<button class="mini" data-logout>🔒 登出</button>' : ''}</div>` +
       (rows.length ? rows.map((t, i) => `<div class="trip" style="--i:${i + 1}" data-go="${esc(t.id)}">${art(t.id)}<span class="badge">${countdown(t) || '尚未排日期'}</span><button class="ed" data-edit="tw_trips:${esc(t.id)}" aria-label="編輯">✎</button>
         <div class="tb"><strong>${esc(t.name)}</strong><div class="sub">${range(t)}</div></div></div>`).join('')
         : `<div class="empty">還沒有旅程，按右下角出發吧。</div>`) + `<div class="ver">${verLine()}</div>` + add('tw_trips');
@@ -1175,7 +1208,7 @@ const views = {
   },
   info() {
     const chips = SUBS.map(([k, v]) => `<button class="dchip ${k === infoTab ? 'on' : ''}" data-sub="${k}"><span>${v}</span></button>`).join('');
-    return `<div class="days">${chips}</div>` + (infoTab === 'docs' ? views.vouchers() : '') + (infoTab === 'restaurants' ? views.restaurants() : infoTab === 'notes' ? views.notes() : views.checklist(infoTab));
+    return `<div class="days">${chips}</div>` + (infoTab === 'docs' ? views.vouchers() : '') + (infoTab === 'restaurants' ? views.restaurants() : infoTab === 'notes' ? views.notes() : infoTab === 'safety' ? views.safety() : views.checklist(infoTab));
   },
   restaurants() {
     const cats = state.check_cats.filter(c => c.kind === 'restaurants'), rs = state.restaurants;
@@ -1418,6 +1451,93 @@ views.recap = () => {
     }).join('');
 };
 
+/* ===== v2.2：緊急與實用卡（內建資料，離線也能用） ===== */
+const SAFE = {
+  jp: { n: '日本', lang: 'ja', calls: [['警察', '110'], ['火警／救護車', '119'], ['海上事故', '118'], ['日本訪客熱線（24 小時，有中文）', '050-3816-2787']], ph: [
+    ['請幫幫我！', 'たすけてください！'], ['請叫救護車', 'きゅうきゅうしゃをよんでください'], ['請報警', 'けいさつをよんでください'], ['我身體不舒服', 'ぐあいがわるいです'],
+    ['我需要去醫院', 'びょういんにいきたいです'], ['我的護照不見了', 'パスポートをなくしました'], ['我的錢包被偷了', 'さいふをとられました'], ['我迷路了', 'みちにまよいました'],
+    ['廁所在哪裡？', 'トイレはどこですか？'], ['車站在哪裡？', 'えきはどこですか？'], ['我有食物過敏', 'たべものアレルギーがあります'], ['可以刷卡嗎？', 'カードはつかえますか？'], ['多少錢？', 'いくらですか？'], ['請給我水', 'おみずをください'], ['謝謝', 'ありがとうございます']] },
+  kr: { n: '韓國', lang: 'ko', calls: [['警察', '112'], ['火警／救護車', '119'], ['韓國旅遊熱線（24 小時，有中文）', '1330']], ph: [
+    ['請幫幫我！', '도와주세요!'], ['請叫救護車', '구급차를 불러 주세요'], ['請報警', '경찰을 불러 주세요'], ['我身體不舒服', '몸이 안 좋아요'],
+    ['我需要去醫院', '병원에 가고 싶어요'], ['我的護照不見了', '여권을 잃어버렸어요'], ['我的錢包被偷了', '지갑을 도둑맞았어요'], ['我迷路了', '길을 잃었어요'],
+    ['廁所在哪裡？', '화장실이 어디예요?'], ['車站在哪裡？', '역이 어디예요?'], ['我有食物過敏', '음식 알레르기가 있어요'], ['可以刷卡嗎？', '카드 돼요?'], ['多少錢？', '얼마예요?'], ['謝謝', '감사합니다']] },
+  th: { n: '泰國', lang: 'th', calls: [['警察', '191'], ['觀光警察', '1155'], ['救護車', '1669'], ['火警', '199']], ph: [
+    ['請幫幫我！', 'ช่วยด้วย!'], ['請叫救護車', 'ช่วยเรียกรถพยาบาลหน่อย'], ['請報警', 'ช่วยเรียกตำรวจหน่อย'], ['我身體不舒服', 'ฉันไม่สบาย'],
+    ['我需要去醫院', 'ฉันอยากไปโรงพยาบาล'], ['我的護照不見了', 'หนังสือเดินทางของฉันหาย'], ['我的錢包被偷了', 'กระเป๋าสตางค์ของฉันถูกขโมย'], ['我迷路了', 'ฉันหลงทาง'],
+    ['廁所在哪裡？', 'ห้องน้ำอยู่ที่ไหน'], ['我有食物過敏', 'ฉันแพ้อาหาร'], ['多少錢？', 'ราคาเท่าไร'], ['謝謝', 'ขอบคุณ']] }
+};
+const SAFE_TIPS = [['護照遺失', '先向當地警察局報案取得證明，再聯絡我國駐外館處辦理補發或入國證明書；備妥護照影本與證件照。'], ['信用卡遺失或被盜刷', '立即撥打發卡銀行的海外服務專線停卡。'], ['生病或受傷', '聯絡保險公司的海外服務專線，保留診斷證明與收據。'], ['行李遺失', '在機場向航空公司櫃檯填寫遺失申報單，保留登機證與行李條。']];
+const ctry = () => {
+  try { const v = localStorage.getItem('tw:country:' + TRIP); if (SAFE[v]) return v; } catch (e) {}
+  const n = curTrip()?.name || '';
+  return /首爾|釜山|濟州|韓國/.test(n) ? 'kr' : /泰國|曼谷|普吉|清邁|芭達雅|蘇美/.test(n) ? 'th' : 'jp';
+};
+const callRow = (label, num) => `<div class="row"><div><strong>${esc(label)}</strong></div><a class="callb" href="tel:${esc(num.replace(/[^\d+]/g, ''))}">📞 ${esc(num)}</a></div>`;
+function showPhrase(i) {
+  const c = SAFE[ctry()], p = c.ph[i]; if (!p) return;
+  document.body.insertAdjacentHTML('beforeend', `<div id="phov"><div class="zh">${esc(p[0])}</div><div class="big" lang="${c.lang}">${esc(p[1])}</div><button type="button" data-phrx>關閉</button></div>`);
+}
+document.addEventListener('change', e => { const s = e.target.closest('[data-ctry]'); if (!s) return; try { localStorage.setItem('tw:country:' + TRIP, s.value); } catch (x) {} render(); });
+views.safety = () => {
+  const k = ctry(), c = SAFE[k], mine = state.info.filter(r => r.category === '緊急聯絡');
+  return `<div class="catbar"><select data-ctry style="width:auto" aria-label="目的地">${Object.entries(SAFE).map(([v, o]) => `<option value="${v}" ${v === k ? 'selected' : ''}>${o.n}</option>`).join('')}</select></div>` +
+    `<div class="legcard"><h2>🆘 ${c.n}緊急電話</h2>${c.calls.map(([l, n]) => callRow(l, n)).join('')}${callRow('我國外交部急難救助（24 小時）', '+886-3-398-2629')}<div class="sub" style="margin-top:8px">內建資料，出發前請再確認最新號碼。</div></div>` +
+    `<div class="legcard"><h2>📇 我的緊急聯絡<button class="mini" data-addemg>＋ 新增</button></h2>${mine.length ? mine.map(r => { const t = ((r.content || '').match(/\+?\d[\d\- ]{5,}\d/) || [])[0]; return `<div class="row" data-edit="info:${r.id}"><div><strong>${esc(r.title)}</strong>${r.content ? `<div class="note">${esc(r.content)}</div>` : ''}</div>${t ? `<a class="callb" href="tel:${esc(t.replace(/[^\d+]/g, ''))}">📞</a>` : ''}</div>`; }).join('') : '<div class="empty small">可加入駐外辦事處、住宿、保險、家人的電話。</div>'}</div>` +
+    `<div class="legcard"><h2>🗣 常用句</h2><div class="sub">點一下全螢幕放大，直接給對方看。</div>${c.ph.map((p, i) => `<div class="row" data-phr="${i}"><div><strong>${esc(p[0])}</strong><div class="sub" lang="${c.lang}">${esc(p[1])}</div></div><span class="sub">放大 ›</span></div>`).join('')}</div>` +
+    `<div class="legcard"><h2>遇到狀況怎麼辦</h2>${SAFE_TIPS.map(([a, b]) => `<div class="row blk"><strong>${a}</strong><p class="note">${b}</p></div>`).join('')}</div>`;
+};
+
+/* ===== v2.3：附件離線備份（存在手機的 Cache Storage，連網時自動備份） ===== */
+const FC = 'tw-files-v1', fileBlobUrl = {};
+let fcCount = 0, fcQ = Promise.resolve();
+const fcKey = p => location.origin + '/__twfile/' + encodeURIComponent(p);
+const fcPath = u => { const i = u.indexOf('/__twfile/'); return i < 0 ? '' : decodeURIComponent(u.slice(i + 10)); };
+const fcMine = p => !!TRIP && p.startsWith(TRIP + '/');
+async function fcPut(path, blob, mime) {
+  if (!window.caches) return;
+  try {
+    const c = await caches.open(FC);
+    await c.put(fcKey(path), new Response(blob, { headers: { 'content-type': blob.type || mime || 'application/octet-stream' } }));
+    if (fcMine(path)) { if (fileBlobUrl[path]) URL.revokeObjectURL(fileBlobUrl[path]); fileBlobUrl[path] = URL.createObjectURL(blob); }
+    fcCount = (await c.keys()).length;
+  } catch (e) {}
+}
+async function fcDel(path) {
+  try { const c = await caches.open(FC); await c.delete(fcKey(path)); if (fileBlobUrl[path]) { URL.revokeObjectURL(fileBlobUrl[path]); delete fileBlobUrl[path]; } } catch (e) {}
+}
+async function fcPrune(ids) {                      // 已刪除的旅程，附件備份一併清掉
+  try { const c = await caches.open(FC); for (const r of await c.keys()) { const p = fcPath(r.url); if (p && !ids.some(i => p.startsWith(i + '/'))) await c.delete(r); } } catch (e) {}
+}
+async function fcRun(list, tid) {
+  if (!window.caches || !sb || !navigator.onLine || !tid) return;
+  const c = await caches.open(FC), keep = new Set(list.map(f => f.path));
+  for (const r of await c.keys()) {                // 附件已在雲端刪除：備份也刪
+    const p = fcPath(r.url);
+    if (p.startsWith(tid + '/') && !keep.has(p)) { await c.delete(r); if (fileBlobUrl[p]) { URL.revokeObjectURL(fileBlobUrl[p]); delete fileBlobUrl[p]; } }
+  }
+  const need = [];
+  for (const f of list) if (!fileBlobUrl[f.path] && !(await c.match(fcKey(f.path)))) need.push(f);
+  if (need.length) {
+    const { data } = await sb.storage.from('tw-files').createSignedUrls(need.map(f => f.path), 3600);
+    for (const d of data || []) {
+      if (!d.signedUrl) continue;
+      try { const r = await fetch(d.signedUrl); if (!r.ok) continue; const b = await r.blob(); await fcPut(d.path, b, need.find(x => x.path === d.path)?.mime); } catch (e) {}
+    }
+  }
+  fcCount = (await c.keys()).length;
+  const v = $('.ver'); if (v) v.textContent = verLine();
+  try { navigator.storage?.persist?.(); } catch (e) {}
+}
+const cacheFilesFor = (list, tid) => (fcQ = fcQ.then(() => fcRun(list, tid)).catch(() => {}));
+(async () => {                                     // 開啟網頁時，把這趟旅程已備份的附件接回畫面（離線也看得到）
+  if (!window.caches) return;
+  try {
+    const c = await caches.open(FC), ks = await c.keys();
+    for (const r of ks) { const p = fcPath(r.url); if (!fcMine(p)) continue; const res = await c.match(r); if (res) fileBlobUrl[p] = URL.createObjectURL(await res.blob()); }
+    fcCount = ks.length; if (ks.length) render();
+  } catch (e) {}
+})();
+
 let fresh = true;
 function render() {
   document.body.className = TRIP ? '' : 'home';
@@ -1438,7 +1558,7 @@ function render() {
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-fold],[data-foldall],[data-qrpick],[data-qrshow],[data-qrclose],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join],[data-impopen],[data-todayopen],[data-journal],[data-fids]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-fold],[data-foldall],[data-qrpick],[data-qrshow],[data-qrclose],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join],[data-impopen],[data-todayopen],[data-journal],[data-fids],[data-phr],[data-phrx],[data-addemg],[data-logout]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
   else if ('day' in el.dataset) { selDay = el.dataset.day; openLeg = null; render(); }
   else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
@@ -1451,6 +1571,10 @@ document.addEventListener('click', e => {
   else if ('todayopen' in el.dataset) { tab = 'itinerary'; selDay = ymd(new Date()); openLeg = null; fresh = true; render(); scrollTo(0, 0); }
   else if (el.dataset.journal) openJournal(el.dataset.journal);
   else if (el.dataset.fids) fidsUpdate(el.dataset.fids);
+  else if (el.dataset.phr != null) showPhrase(+el.dataset.phr);
+  else if ('phrx' in el.dataset) $('#phov')?.remove();
+  else if ('logout' in el.dataset) { if (confirm('要登出嗎？')) sb.auth.signOut().then(() => location.reload()); }
+  else if ('addemg' in el.dataset) openForm('info', null, { category: '緊急聯絡' });
   else if ('qrpick' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); $('#qr-' + el.dataset.qrpick)?.click(); }
   else if ('qrshow' in el.dataset) showQR(el.dataset.qrshow);
   else if ('qrclose' in el.dataset) closeQR();

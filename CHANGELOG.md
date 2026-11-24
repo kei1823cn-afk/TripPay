@@ -3,6 +3,9 @@
 版本號寫在首頁最下方（例如 v1.6.0）。
 每次上傳 GitHub 時，commit 訊息請寫「版本號 + 改了什麼」，之後要退回就靠 GitHub 的歷史。
 
+## v2.7.1 — 2026-11-23
+- 修正：登入後呼叫 Edge Function 失敗的問題——translate、tdx 改為函式內自行驗證「已登入帳號」（verify_jwt 關閉），相容新版 JWT 簽章；翻譯失敗時顯示錯誤代碼方便排查
+
 ## v2.7.0 — 2026-11-23
 - 刪除「回顧」分頁；新增「工具」分頁，第一個工具是「拍照翻譯」：可用後鏡頭拍照（沒有切換前鏡頭）或從相簿選圖，英文／日文／韓文（可自動偵測）翻成繁體中文，原文與翻譯並列、可複製
 - 需新增 Edge Function「translate」（translate-function.ts），並在 Supabase Secrets 設定 GEMINI_API_KEY（Google AI Studio 免費金鑰）；沒有資料庫變更

@@ -6,7 +6,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>旅行手帳</title>
-<meta name="app-version" content="2.7.0">
+<meta name="app-version" content="2.7.1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{--bg:#f5f0de;--card:#fffdf4;--ink:#2b4a47;--mute:#6b8279;--sea:#3a86b8;--sky:#bfe0ef;--sun:#f2b84b;--leaf:#5e9e6e;--line:#d9d3b8;--bad:#c0563f;--onsun:#2b4a47;--onleaf:#fff;--btn:#16283f;--serif:"Hiragino Mincho ProN","Songti TC","Noto Serif TC",serif}
@@ -271,7 +271,7 @@ html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-event
 <div id="toast"></div>
 
 <script>
-const APP_VERSION = '2.7.0', APP_DATE = '2026-11-23';   // 每次修改請同步更新這裡與 CHANGELOG.md
+const APP_VERSION = '2.7.1', APP_DATE = '2026-11-23';   // 每次修改請同步更新這裡與 CHANGELOG.md
 /* ===== 設定：填入 Supabase 後即啟用雲端同步；留空則為本機模式 ===== */
 const CONFIG = {
   SUPABASE_URL: 'https://kadmtabkxzzytxyodbhf.supabase.co',
@@ -1451,8 +1451,8 @@ async function trRun(file) {
   Object.assign(trSt, { img: b64, res: null, err: '', busy: true }); render();
   try {
     const { data, error } = await sb.functions.invoke('translate', { body: { image: b64.split(',')[1], mime: 'image/jpeg', lang: trSt.lang } });
-    if (error || !data) trSt.err = '翻譯功能沒有回應（請確認 translate 函式已部署）';
-    else if (data.error) trSt.err = { no_key: '翻譯金鑰還沒設定（Supabase Secrets：GEMINI_API_KEY）', bad_key: '翻譯金鑰不正確，請重新建立並更新', quota: '免費額度暫時用完，請稍後再試', bad_image: '圖片太大或讀取失敗，請重拍' }[data.error] || '翻譯失敗：' + data.error;
+    if (error || !data) trSt.err = '翻譯功能沒有回應（' + (error?.context?.status || error?.name || '無資料') + '）';
+    else if (data.error) trSt.err = { no_key: '翻譯金鑰還沒設定（Supabase Secrets：GEMINI_API_KEY）', bad_key: '翻譯金鑰不正確，請重新建立並更新', quota: '免費額度暫時用完，請稍後再試', bad_image: '圖片太大或讀取失敗，請重拍', unauthorized: '登入已失效，請重新登入後再試' }[data.error] || '翻譯失敗：' + data.error;
     else trSt.res = data;
   } catch (e) { trSt.err = '翻譯失敗，請稍後再試'; }
   trSt.busy = false; render();

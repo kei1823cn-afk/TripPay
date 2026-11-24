@@ -6,7 +6,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>旅行手帳</title>
-<meta name="app-version" content="2.6.0">
+<meta name="app-version" content="2.7.0">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{--bg:#f5f0de;--card:#fffdf4;--ink:#2b4a47;--mute:#6b8279;--sea:#3a86b8;--sky:#bfe0ef;--sun:#f2b84b;--leaf:#5e9e6e;--line:#d9d3b8;--bad:#c0563f;--onsun:#2b4a47;--onleaf:#fff;--btn:#16283f;--serif:"Hiragino Mincho ProN","Songti TC","Noto Serif TC",serif}
@@ -254,6 +254,12 @@ html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-event
 #phov button{padding:14px 40px;border:0;border-radius:16px;background:#16283f;color:#fff;font:inherit;font-weight:700;font-size:1.05rem}
 .tfg{display:flex;gap:8px;margin:8px 0}
 .tfg span{flex:1;background:var(--card);border-radius:10px;padding:6px 10px;font-weight:700}
+#camov{position:fixed;inset:0;z-index:2500;background:#000;display:flex;flex-direction:column}
+#camov video{flex:1;min-height:0;width:100%;object-fit:cover}
+.camb{display:flex;justify-content:space-around;align-items:center;padding:18px 20px calc(18px + env(safe-area-inset-bottom,0px));background:#000}
+.camb button{color:#fff;background:none;border:0;font:inherit;font-size:1.05rem;min-width:64px}
+.camb .shot{width:70px;height:70px;min-width:70px;border-radius:50%;background:#fff;border:4px solid #888}
+.camb span{min-width:64px}
 </style>
 </head>
 <body>
@@ -265,7 +271,7 @@ html[data-theme] .hero::after{content:"";position:absolute;inset:0;pointer-event
 <div id="toast"></div>
 
 <script>
-const APP_VERSION = '2.6.0', APP_DATE = '2026-11-23';   // 每次修改請同步更新這裡與 CHANGELOG.md
+const APP_VERSION = '2.7.0', APP_DATE = '2026-11-23';   // 每次修改請同步更新這裡與 CHANGELOG.md
 /* ===== 設定：填入 Supabase 後即啟用雲端同步；留空則為本機模式 ===== */
 const CONFIG = {
   SUPABASE_URL: 'https://kadmtabkxzzytxyodbhf.supabase.co',
@@ -357,7 +363,7 @@ const INFO_CATS = ['簽證入境', '保險', '交通票券', '網卡通訊', '�
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const TABLES = ['itinerary', 'flights', 'lodging', 'info', 'members', 'expenses', 'restaurants', 'check_cats', 'check_items', 'tw_files', 'reminders'];
-const TABS = { trip: '首頁', itinerary: '行程', info: '資訊', money: '記帳', recap: '回顧' };
+const TABS = { trip: '首頁', itinerary: '行程', info: '資訊', money: '記帳', tools: '工具' };
 const TRIP = new URLSearchParams(location.search).get('trip');   // 沒有 = 首頁
 const KEY = 'tw:data:' + TRIP;
 const CONFIGURED = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_KEY);
@@ -1358,14 +1364,6 @@ async function impSave(pick) {
     await loadAll();
   }
 }
-function openJournal(day) {
-  if (!canEdit()) return toast('離線中，目前只能查看');
-  const ex = state.info.find(r => r.category === '旅行日誌' && r.title === day);
-  $('#imp').innerHTML = `<div class="itf"><div class="hd"><h3>${fmtDay(day)} 心得</h3><button type="button" class="xb" data-impx aria-label="關閉">✕</button></div>
-    <label>今天印象最深的是…</label><textarea id="jtxt" style="min-height:140px;resize:vertical" placeholder="吃到的、看到的、想記住的">${esc(ex?.content)}</textarea>
-    <button type="button" class="submit" data-jsave="${day}">儲存</button></div>`;
-  $('#imp').showModal();
-}
 $('#imp').addEventListener('click', async e => {
   const el = e.target.closest('[data-impx],[data-impcopy],[data-imppar],[data-impgo],[data-impi],[data-jsave],[data-memedit],[data-memadd]'); if (!el) return;
   const d = el.dataset;
@@ -1415,6 +1413,55 @@ function openMembers() {                         // 記帳頁右上角的成員�
     <button type="button" class="submit" data-memadd>＋ 新增成員</button></div>`;
   $('#imp').showModal(); document.activeElement?.blur();
 }
+/* ===== v2.7：工具頁 ＞ 拍照翻譯（後鏡頭或相簿；英／日／韓 → 繁體中文；經 Edge Function「translate」） ===== */
+let toolTab = null, camStream = null;
+const trSt = { lang: 'auto', img: '', res: null, busy: false, err: '' };
+const LN = { en: '英文', ja: '日文', ko: '韓文' };
+views.tools = () => toolTab === 'tr' ? trView() : `<h2>🧰 工具</h2><div class="row" data-tool="tr"><div><strong>📷 拍照翻譯</strong><div class="sub">拍照或選相簿，英文／日文／韓文翻成繁體中文</div></div><span class="sub">開啟 ›</span></div>`;
+function trView() {
+  const opts = [['auto', '自動偵測'], ['en', '英文'], ['ja', '日文'], ['ko', '韓文']].map(([v, l]) => `<option value="${v}" ${v === trSt.lang ? 'selected' : ''}>${l}</option>`).join('');
+  const it = trSt.res?.items || [];
+  const body = trSt.busy ? '<div class="empty small">翻譯中…</div>' : trSt.err ? `<div class="warn">${esc(trSt.err)}</div>`
+    : !trSt.res ? '<div class="empty small">拍下菜單、路標或說明牌，會自動辨識並翻成繁體中文。</div>'
+    : !it.length ? '<div class="empty small">沒有辨識到文字，換個角度或靠近一點再試一次。</div>'
+    : (LN[trSt.res.lang] ? `<div class="sub">偵測語言：${LN[trSt.res.lang]}</div>` : '') + it.map(x => `<div class="row blk"><div class="sub">${esc(x.src)}</div><div style="font-size:1.1rem;font-weight:700;margin-top:2px">${esc(x.zh)}</div></div>`).join('') + '<div class="catbar"><button class="mini" data-trcopy>📋 複製翻譯</button></div>';
+  return `<div class="ilh"><button class="mini" data-tool="">‹ 工具</button><select data-trlang style="width:auto" aria-label="原文語言">${opts}</select></div>
+    <div style="display:flex;gap:10px;margin:12px 0"><button class="callb" style="flex:1;border:0;font:inherit" data-trcam>📷 拍照</button><button class="callb" style="flex:1;border:0;font:inherit" data-trpick>🖼 相簿</button></div>
+    <input type="file" id="trfile" accept="image/*" hidden><input type="file" id="trcap" accept="image/*" capture="environment" hidden>
+    ${trSt.img ? `<img src="${trSt.img}" alt="" style="width:100%;max-height:40vh;object-fit:contain;border-radius:14px;background:var(--card);margin-bottom:8px">` : ''}${body}`;
+}
+async function startCam() {                         // 只開後鏡頭（沒有切換前鏡頭的按鈕）
+  if (!navigator.mediaDevices?.getUserMedia) return $('#trcap')?.click();
+  let st; try { st = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }); }
+  catch (e) { if (e.name === 'NotAllowedError') toast('請允許相機權限（瀏覽器或手機設定）'); else $('#trcap')?.click(); return; }
+  camStream = st;
+  document.body.insertAdjacentHTML('beforeend', '<div id="camov"><video playsinline autoplay muted></video><div class="camb"><button type="button" data-camx>取消</button><button type="button" class="shot" data-camshot aria-label="拍照"></button><span></span></div></div>');
+  const v = $('#camov video'); v.srcObject = st; try { await v.play(); } catch (e) {}
+}
+function closeCam() { camStream?.getTracks().forEach(t => t.stop()); camStream = null; $('#camov')?.remove(); }
+function camShot() {
+  const v = $('#camov video'); if (!v?.videoWidth) return;
+  const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0);
+  closeCam(); c.toBlob(b => b && trRun(b), 'image/jpeg', .9);
+}
+async function trRun(file) {
+  if (!sb) return toast('本機模式無法使用翻譯');
+  if (!navigator.onLine) return toast('離線中，翻譯需要網路');
+  const blob = await shrink(file), b64 = await new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(blob); });
+  Object.assign(trSt, { img: b64, res: null, err: '', busy: true }); render();
+  try {
+    const { data, error } = await sb.functions.invoke('translate', { body: { image: b64.split(',')[1], mime: 'image/jpeg', lang: trSt.lang } });
+    if (error || !data) trSt.err = '翻譯功能沒有回應（請確認 translate 函式已部署）';
+    else if (data.error) trSt.err = { no_key: '翻譯金鑰還沒設定（Supabase Secrets：GEMINI_API_KEY）', bad_key: '翻譯金鑰不正確，請重新建立並更新', quota: '免費額度暫時用完，請稍後再試', bad_image: '圖片太大或讀取失敗，請重拍' }[data.error] || '翻譯失敗：' + data.error;
+    else trSt.res = data;
+  } catch (e) { trSt.err = '翻譯失敗，請稍後再試'; }
+  trSt.busy = false; render();
+}
+document.addEventListener('change', e => {
+  const l = e.target.closest('[data-trlang]'); if (l) { trSt.lang = l.value; return; }
+  const f = e.target.closest('#trfile,#trcap'); if (!f) return;
+  const file = f.files && f.files[0]; f.value = ''; if (file) trRun(file);
+});
 const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 const doneAt = r => endMin(r) ?? (toMin(r?.time) != null ? toMin(r.time) + 60 : null);   // 沒有結束時間就當作一小時
 function todayCard(t) {
@@ -1445,19 +1492,6 @@ function todayCard(t) {
   return `<div class="legcard"><h2>📍 今天 · 第 ${n} 天<button class="mini" data-todayopen>全部行程</button></h2>${fh}${b}</div>`;
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && TRIP && tab === 'trip' && !wxEdit && !document.querySelector('dialog[open]')) render(); });
-views.recap = () => {
-  const days = tripDays(), it = state.itinerary, ex = state.expenses, tot = ex.reduce((s, e) => s + twd(e), 0), n = state.members.length || 1;
-  if (!days.length && !ex.length) return '<div class="empty">先設定旅程日期，這裡會自動整理你的旅行回顧。</div>';
-  const st = (v, l) => `<div class="rst"><b>${v}</b><span>${l}</span></div>`, top = [...ex].sort((a, b) => twd(b) - twd(a))[0], J = d => state.info.find(r => r.category === '旅行日誌' && r.title === d);
-  return `<div class="legcard"><h2>🎞 旅行回顧</h2><div class="rgrid">${st(days.length, '天數')}${st(it.length, '行程')}${st(it.filter(r => r.category === '景點').length, '景點')}${st(state.restaurants.length, '餐廳')}${st(Math.round(tot).toLocaleString(), '總花費 NT$')}${st(Math.round(tot / n).toLocaleString(), '人均 NT$')}</div></div>` +
-    (ex.length ? `<div class="legcard"><h2>💰 花費</h2>${catStats(ex)}${top ? `<div class="sub" style="margin-top:10px">最大一筆：${esc(top.title)}　${nt(twd(top))}</div>` : ''}</div>` : '') +
-    (state.restaurants.length ? `<div class="legcard"><h2>🍜 吃過的店</h2><div class="chips">${state.restaurants.map(r => `<span class="tag">${esc(r.name)}</span>`).join('')}</div></div>` : '') +
-    days.map((d, i) => {
-      const rows = dayRows(d), j = J(d), sp = ex.filter(e => e.day === d).reduce((s, e) => s + twd(e), 0);
-      return `<div class="legcard"><h2>D${i + 1} · ${d.slice(5).replace('-', '/')}<button class="mini" data-journal="${d}">${j?.content ? '✎ 心得' : '＋ 心得'}</button></h2>${sp ? `<div class="sub">當天花費 ${nt(sp)}</div>` : ''}${rows.length ? `<div class="chips">${rows.map(r => `<span class="tag">${esc(r.title)}</span>`).join('')}</div>` : '<div class="sub">這天沒有行程紀錄</div>'}${j?.content ? `<p class="note">${esc(j.content)}</p>` : ''}</div>`;
-    }).join('');
-};
-
 /* ===== v2.2：緊急與實用卡（內建資料，離線也能用） ===== */
 const SAFE = {
   jp: { n: '日本', lang: 'ja', calls: [['警察', '110'], ['火警／救護車', '119'], ['海上事故', '118'], ['日本訪客熱線（24 小時，有中文）', '050-3816-2787']], ph: [
@@ -1565,7 +1599,7 @@ function render() {
 }
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;
-  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-fold],[data-foldall],[data-qrpick],[data-qrshow],[data-qrclose],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join],[data-impopen],[data-todayopen],[data-journal],[data-fids],[data-phr],[data-phrx],[data-addemg],[data-logout],[data-mem]'); if (!el) return;
+  const el = e.target.closest('[data-tab],[data-add],[data-edit],[data-go],[data-day],[data-sub],[data-preset],[data-rmfile],[data-trans],[data-tsave],[data-tcancel],[data-fold],[data-foldall],[data-qrpick],[data-qrshow],[data-qrclose],[data-mv],[data-rmit],[data-wxsave],[data-wxedit],[data-wxlive],[data-wxback],[data-catpick],[data-join],[data-impopen],[data-todayopen],[data-fids],[data-phr],[data-phrx],[data-addemg],[data-logout],[data-mem],[data-tool],[data-trcam],[data-trpick],[data-trcopy],[data-camshot],[data-camx]'); if (!el) return;
   if (el.dataset.go) location.search = '?trip=' + encodeURIComponent(el.dataset.go);
   else if ('day' in el.dataset) { selDay = el.dataset.day; openLeg = null; render(); }
   else if (el.dataset.sub) { infoTab = el.dataset.sub; render(); }
@@ -1576,11 +1610,16 @@ document.addEventListener('click', e => {
   else if ('join' in el.dataset) joinTrip();
   else if ('impopen' in el.dataset) openImport();
   else if ('todayopen' in el.dataset) { tab = 'itinerary'; selDay = ymd(new Date()); openLeg = null; fresh = true; render(); scrollTo(0, 0); }
-  else if (el.dataset.journal) openJournal(el.dataset.journal);
   else if (el.dataset.fids) fidsUpdate(el.dataset.fids);
   else if (el.dataset.phr != null) showPhrase(+el.dataset.phr);
   else if ('phrx' in el.dataset) $('#phov')?.remove();
   else if ('mem' in el.dataset) openMembers();
+  else if ('tool' in el.dataset) { toolTab = el.dataset.tool || null; render(); }
+  else if ('trcam' in el.dataset) startCam();
+  else if ('trpick' in el.dataset) $('#trfile')?.click();
+  else if ('trcopy' in el.dataset) navigator.clipboard.writeText((trSt.res?.items || []).map(x => x.zh).join('\n')).then(() => toast('已複製翻譯'), () => toast('複製失敗'));
+  else if ('camshot' in el.dataset) camShot();
+  else if ('camx' in el.dataset) closeCam();
   else if ('logout' in el.dataset) { if (confirm('要登出嗎？')) sb.auth.signOut().then(() => location.reload()); }
   else if ('addemg' in el.dataset) openForm('info', null, { category: '緊急聯絡' });
   else if ('qrpick' in el.dataset) { if (!canEdit()) return toast('離線中，目前只能查看'); $('#qr-' + el.dataset.qrpick)?.click(); }
